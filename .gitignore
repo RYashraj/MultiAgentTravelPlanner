@@ -26,3 +26,7 @@ npm-debug.log*
 # IDE
 .vscode/
 .idea/
+
+# Backend static offline assets
+backend/app/static/
+
