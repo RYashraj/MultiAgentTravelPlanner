@@ -1,4 +1,4 @@
-# 🌍 Multi-Agent Travel Planner
+# VoyagerAI — Autonomous Multi-Agent AI Travel Planner
 
 ## 📌 Project Overview
 The **Multi-Agent Travel Planner** is an AI-driven system designed to automate and optimize the complex process of travel planning. Built as part of our Agentic AI Internship, this project leverages a multi-agent architecture where distinct AI personas collaborate to generate personalized, constraint-aware itineraries.
@@ -12,11 +12,12 @@ Our system utilizes a collaborative approach with the following specialized agen
 *   **🏨 The Accommodation Agent:** Identifies optimal stays based on budget, safety, and proximity to planned activities.
 *   **🎒 The Experience Agent:** Curates day-by-day schedules, including highly-rated food spots, hidden gems, and core attractions.
 
-## 🛠️ Tech Stack (WIP)
-*   **Core Framework:** `[e.g., CrewAI / LangGraph / n8n]`
-*   **Language:** Python `[or specify Node.js if applicable]`
-*   **LLM Provider:** `[e.g., OpenAI / Gemini / Anthropic]`
-*   **APIs:** `[e.g., Google Flights API, Amadeus, Yelp, Google Maps]`
+## 🛠️ Tech Stack & Infrastructure (Week 2 Skeleton Complete)
+- **Backend:** FastAPI + SQLAlchemy + Alembic (Python 3.12)
+- **Frontend:** Next.js 14 (App Router) + Tailwind CSS (TypeScript)
+- **Database:** PostgreSQL (Supabase in production, local Docker for dev)
+- **Cache:** Redis
+- **CI:** GitHub Actions
 
 ## 👥 The Team
 *   **Yashraj** (Captain)
@@ -24,13 +25,93 @@ Our system utilizes a collaborative approach with the following specialized agen
 *   **Shreyas**
 *   **Meet**
 
-## 🚀 Current Roadmap
-- [x] Project Finalization & Conceptualization
-- [x] Agent Role Definition
-- [ ] Tech Stack Finalization
-- [ ] API Research & Testing
-- [ ] Environment Setup & First Agent Communication Test
-- [ ] Full System Integration
+---
 
-## 💻 Local Setup & Installation
-*(Instructions will be updated once the environment is set up)*
+## 🚀 Local Setup & Installation
+
+### Option A — Docker (recommended)
+```bash
+git clone <your-repo-url>
+cd voyagerai
+cp backend/.env.example backend/.env
+docker compose up --build
+```
+- Backend: http://localhost:8000/docs
+- Frontend: http://localhost:3000
+
+### Option B — Run manually
+
+**Backend**
+```bash
+cd backend
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env            # then fill in DATABASE_URL if not using Docker's Postgres
+alembic upgrade head
+uvicorn app.main:app --reload
+```
+
+**Frontend**
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local
+npm run dev
+```
+
+Visit http://localhost:3000 — it pings the backend `/health` endpoint live and shows API + DB connection status.
+
+## 🗄️ Database migrations
+```bash
+cd backend
+alembic revision --autogenerate -m "describe your change"
+alembic upgrade head
+```
+Never edit the DB schema by hand — always go through a migration so everyone's local DB and production stay in sync.
+
+## 🧪 Running tests
+```bash
+cd backend && pytest tests/ -v
+cd frontend && npm run lint && npm run build
+```
+Both run automatically in CI on every push/PR via `.github/workflows/ci.yml`.
+
+## 📁 Project structure
+```
+voyagerai/
+├── backend/
+│   ├── app/
+│   │   ├── api/v1/       # route handlers
+│   │   ├── core/          # config
+│   │   ├── db/             # models, session, base
+│   │   └── main.py
+│   ├── migrations/         # Alembic
+│   └── tests/
+├── frontend/
+│   └── app/                 # Next.js App Router pages
+├── docker-compose.yml
+└── .github/workflows/ci.yml
+```
+
+## 🔄 Git workflow
+```bash
+git checkout -b feat/your-feature develop
+# ...make changes...
+git add .
+git commit -m "feat: short description"
+git push origin feat/your-feature
+# open PR into develop, get 1 review, merge
+# develop -> main only at end of each week, after Friday demo
+```
+
+## 📝 Week 2 Submission Checklist
+- [x] Tech stack finalized and justified
+- [x] ER diagram (see project roadmap doc)
+- [x] Architecture diagram (see project roadmap doc)
+- [x] Backend skeleton — FastAPI + DB connectivity, tested
+- [x] Frontend skeleton — Next.js, pings backend live, tested
+- [x] Database schema — Users + Trips tables, Alembic migration verified (upgrade + downgrade)
+- [x] Docker + docker-compose for local dev
+- [x] GitHub Actions CI (backend tests + frontend build/lint)
+- [ ] Push to GitHub, confirm CI passes on the actual repo
