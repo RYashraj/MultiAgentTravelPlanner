@@ -15,11 +15,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from contextlib import asynccontextmanager
-from app.api.v1 import health
+from app.api.v1 import health, trips
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
-from app.db.models import User, Trip
+from app.db.models import User, Trip, Message
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -95,6 +95,7 @@ async def custom_redoc_html():
     )
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
+app.include_router(trips.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")
