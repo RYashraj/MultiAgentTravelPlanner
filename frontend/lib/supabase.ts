@@ -6,9 +6,23 @@ const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 // Only initialize Supabase if URL and Key are actually populated
 export const isMockMode = !supabaseUrl || !supabaseAnonKey;
 
+if (isMockMode) {
+  if (typeof window !== "undefined") {
+    console.warn(
+      "Supabase env vars are missing. Running in Mock Auth Mode. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to enable real Supabase integration."
+    );
+  }
+}
+
 export const supabase = isMockMode
   ? null
-  : createClient(supabaseUrl, supabaseAnonKey);
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
 
 export interface AuthUser {
   email: string;

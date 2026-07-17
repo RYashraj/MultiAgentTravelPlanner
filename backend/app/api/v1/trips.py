@@ -15,6 +15,7 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.db.models import User, Trip, Message, Itinerary
 from app.agents.supervisor import SupervisorAgent
+from app.repositories import TripRepository, MessageRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -70,14 +71,12 @@ def create_trip(
     """
     Creates a new travel itinerary (trip) for the authenticated user.
     """
-    trip = Trip(
+    trip_repo = TripRepository(db)
+    trip = trip_repo.create(
         user_id=current_user.id,
         destination=trip_in.destination,
         status=trip_in.status
     )
-    db.add(trip)
-    db.commit()
-    db.refresh(trip)
     logger.info(f"Created trip {trip.id} to {trip.destination} for user {current_user.email}")
     return trip
 
@@ -90,7 +89,8 @@ def list_trips(
     """
     Retrieves all trips belonging to the authenticated user.
     """
-    trips = db.query(Trip).filter(Trip.user_id == current_user.id).order_by(Trip.created_at.desc()).all()
+    trip_repo = TripRepository(db)
+    trips = trip_repo.list_by_user(current_user.id)
     return trips
 
 
@@ -104,7 +104,8 @@ def get_trip_messages(
     Retrieves the message history for a specific trip.
     Guards access so users can only view their own trips' chats.
     """
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    trip_repo = TripRepository(db)
+    trip = trip_repo.get_by_id(trip_id)
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -116,7 +117,8 @@ def get_trip_messages(
             detail="Access denied to this trip's resources"
         )
     
-    messages = db.query(Message).filter(Message.trip_id == trip_id).order_by(Message.created_at.ascii if hasattr(Message.created_at, "ascii") else Message.created_at).all()
+    message_repo = MessageRepository(db)
+    messages = message_repo.list_by_trip(trip_id)
     return messages
 
 
@@ -130,7 +132,8 @@ def get_trip_itineraries(
     Retrieves the generated day-by-day itineraries for a specific trip.
     Guards access so users can only view their own trips' itineraries.
     """
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    trip_repo = TripRepository(db)
+    trip = trip_repo.get_by_id(trip_id)
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -161,7 +164,8 @@ async def send_trip_message(
     2. Streams the assistant message word-by-word via Server-Sent Events (SSE).
     """
     # 1. Validate trip ownership
-    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    trip_repo = TripRepository(db)
+    trip = trip_repo.get_by_id(trip_id)
     if not trip:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -173,15 +177,13 @@ async def send_trip_message(
             detail="Access denied to this trip's resources"
         )
 
-    # 2. Save user message to database
-    user_msg = Message(
+    # 2. Save user message to database using Repository
+    message_repo = MessageRepository(db)
+    user_msg = message_repo.create(
         trip_id=trip_id,
         sender="user",
         content=message_in.content
     )
-    db.add(user_msg)
-    db.commit()
-    db.refresh(user_msg)
 
     # 3. Invoke SupervisorAgent to orchestrate and stream planning
     agent = SupervisorAgent()

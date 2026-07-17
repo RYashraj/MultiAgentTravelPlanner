@@ -59,13 +59,32 @@ class SupervisorAgent:
             agent_run.logs = current_logs
             db.commit()
 
-        # Step 1: Supervisor parses criteria
+        # Step 1: Run the Coordinator StateGraph skeleton
+        from app.agents.coordinator import coordinator_graph, AgentState
+        
+        state_input = AgentState(
+            destination=destination,
+            dates=None,
+            budget=None,
+            preferences=None,
+            agent_outputs=[],
+            messages=[]
+        )
+        
+        # Invoke the compiled graph asynchronously
+        graph_output = await coordinator_graph.ainvoke(state_input)
+        coordinator_logs = graph_output.get("agent_outputs", [])
+        last_log = coordinator_logs[-1] if coordinator_logs else {
+            "agent": "Coordinator Agent",
+            "content": f"[Coordinator] Planning started for destination: {destination}."
+        }
+        
         yield {
             "event": "agent_log",
-            "agent": "Supervisor Agent",
-            "content": f"[Orchestrator] Parsing criteria for trip to {destination} based on user query: '{user_query}'"
+            "agent": last_log["agent"],
+            "content": last_log["content"]
         }
-        add_run_log("Supervisor Agent", f"Started orchestration for query: {user_query}")
+        add_run_log(last_log["agent"], last_log["content"])
         await asyncio.sleep(1.0)
 
         # Step 2: Logistics Agent fetches transport options
