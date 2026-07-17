@@ -12,11 +12,13 @@ Our system utilizes a collaborative approach with the following specialized agen
 *   **🏨 The Accommodation Agent:** Identifies optimal stays based on budget, safety, and proximity to planned activities.
 *   **🎒 The Experience Agent:** Curates day-by-day schedules, including highly-rated food spots, hidden gems, and core attractions.
 
-## 🛠️ Tech Stack & Infrastructure (Week 2 Skeleton Complete)
-- **Backend:** FastAPI + SQLAlchemy + Alembic (Python 3.12)
+## 🛠️ Tech Stack & Infrastructure (Week 3 Completed)
+- **Backend:** FastAPI + SQLAlchemy + Alembic (Python 3.12/3.14)
 - **Frontend:** Next.js 14 (App Router) + Tailwind CSS (TypeScript)
-- **Database:** PostgreSQL (Supabase in production, local Docker for dev)
-- **Cache:** Redis
+- **Database:** SQLite (local dev), PostgreSQL / Supabase (production)
+- **Authentication:** Supabase Auth (ES256/RS256 JWKS & HS256 verify) + Mock bypass for local dev
+- **Orchestration:** LangGraph (StateGraph)
+- **Cache:** Redis Session Cache (with DB lookup fallback)
 - **CI:** GitHub Actions
 
 ## 👥 The Team
@@ -29,89 +31,95 @@ Our system utilizes a collaborative approach with the following specialized agen
 
 ## 🚀 Local Setup & Installation
 
-### Option A — Docker (recommended)
-```bash
-git clone <your-repo-url>
-cd voyagerai
-cp backend/.env.example backend/.env
-docker compose up --build
-```
-- Backend: http://localhost:8000/docs
-- Frontend: http://localhost:3000
-
-### Option B — Run manually
+### Option A — Run manually
 
 **Backend**
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-cp .env.example .env            # then fill in DATABASE_URL if not using Docker's Postgres
-alembic upgrade head
-uvicorn app.main:app --reload
-```
+1. Navigate to backend:
+   ```bash
+   cd backend
+   ```
+2. Create and activate virtual environment:
+   ```bash
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On Linux/macOS:
+   source venv/bin/activate
+   ```
+3. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+4. Copy the environment variables:
+   ```bash
+   cp .env.example .env
+   # Populate with your Supabase project keys (URL, Anon Key, JWT Secret)
+   ```
+5. Apply database migrations:
+   ```bash
+   alembic upgrade head
+   ```
+6. Run the local dev server:
+   ```bash
+   uvicorn app.main:app --reload --port 8000
+   ```
 
 **Frontend**
-```bash
-cd frontend
-npm install
-cp .env.local.example .env.local
-npm run dev
-```
+1. Navigate to frontend:
+   ```bash
+   cd frontend
+   ```
+2. Install Node dependencies:
+   ```bash
+   npm install
+   ```
+3. Copy environment variables:
+   ```bash
+   cp .env.local.example .env.local
+   # Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to sync real Supabase auth, or leave empty to default to Mock Auth bypass mode.
+   ```
+4. Start Next.js server:
+   ```bash
+   npm run dev
+   ```
 
-Visit http://localhost:3000 — it pings the backend `/health` endpoint live and shows API + DB connection status.
-
-## 🗄️ Database migrations
-```bash
-cd backend
-alembic revision --autogenerate -m "describe your change"
-alembic upgrade head
-```
-Never edit the DB schema by hand — always go through a migration so everyone's local DB and production stay in sync.
+---
 
 ## 🧪 Running tests
 ```bash
-cd backend && pytest tests/ -v
-cd frontend && npm run lint && npm run build
+# Backend unit tests
+cd backend && venv\Scripts\python -m pytest
+# Frontend production build compilation
+cd frontend && npm run build
 ```
-Both run automatically in CI on every push/PR via `.github/workflows/ci.yml`.
 
 ## 📁 Project structure
 ```
 voyagerai/
 ├── backend/
 │   ├── app/
-│   │   ├── api/v1/       # route handlers
-│   │   ├── core/          # config
-│   │   ├── db/             # models, session, base
+│   │   ├── api/v1/       # auth, health, trips router endpoints
+│   │   ├── core/         # auth middleware, Redis cache client, security token parser
+│   │   ├── db/           # SQLAlchemy models and SQLite connection
+│   │   ├── repositories/ # Users, Trips, Messages, Itineraries, AgentRuns repositories
+│   │   ├── schemas/      # Pydantic request/response models
+│   │   ├── agents/       # Supervisor Agent & Coordinator Agent StateGraph
 │   │   └── main.py
-│   ├── migrations/         # Alembic
-│   └── tests/
+│   ├── migrations/       # Alembic migrations
+│   └── tests/            # Pytest test suite
 ├── frontend/
-│   └── app/                 # Next.js App Router pages
-├── docker-compose.yml
-└── .github/workflows/ci.yml
+│   ├── app/              # Next.js App Router (dashboard, auth, chat workspace)
+│   ├── components/       # AuthGuard, Navbar, Modal layout components
+│   ├── contexts/         # AuthContext state provider
+│   └── lib/              # api and supabase wrappers
 ```
 
-## 🔄 Git workflow
-```bash
-git checkout -b feat/your-feature develop
-# ...make changes...
-git add .
-git commit -m "feat: short description"
-git push origin feat/your-feature
-# open PR into develop, get 1 review, merge
-# develop -> main only at end of each week, after Friday demo
-```
-
-## 📝 Week 2 Submission Checklist
-- [x] Tech stack finalized and justified
-- [x] ER diagram (see project roadmap doc)
-- [x] Architecture diagram (see project roadmap doc)
-- [x] Backend skeleton — FastAPI + DB connectivity, tested
-- [x] Frontend skeleton — Next.js, pings backend live, tested
-- [x] Database schema — Users + Trips tables, Alembic migration verified (upgrade + downgrade)
-- [x] Docker + docker-compose for local dev
-- [x] GitHub Actions CI (backend tests + frontend build/lint)
-- [ ] Push to GitHub, confirm CI passes on the actual repo
+## 📝 Week 3 Submission Checklist
+- [x] Repository pattern database layer (Users, Trips, Messages, Itineraries, AgentRuns)
+- [x] Redis caching configuration for decoded user sessions
+- [x] JWT token verification using ES256/RS256 JWKS fetch and legacy HS256 fallbacks
+- [x] Coordinator Agent LangGraph StateGraph skeleton compiled and wired
+- [x] Next.js frontend split into structured landing, auth, dashboard, and chat layout pages
+- [x] Real-time chat workspace with stream processing and logs console UI
+- [x] 100% passing automated test suite (13/13 backend tests)
+- [x] Next.js compilation (static check & type check) runs error-free

@@ -15,11 +15,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.openapi.docs import get_swagger_ui_html, get_redoc_html
 
 from contextlib import asynccontextmanager
-from app.api.v1 import health
+from app.api.v1 import health, trips, auth
+from app.core.auth_middleware import SupabaseJWTMiddleware
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
-from app.db.models import User, Trip
+from app.db.models import User, Trip, Message, Itinerary, AgentRun
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +61,8 @@ app = FastAPI(
     redoc_url=None,
 )
 
+app.add_middleware(SupabaseJWTMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -95,6 +98,8 @@ async def custom_redoc_html():
     )
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
+app.include_router(trips.router, prefix=settings.api_v1_prefix)
+app.include_router(auth.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

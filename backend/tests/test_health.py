@@ -2,6 +2,7 @@
 Test the health endpoint using an in-memory SQLite DB instead of Postgres,
 so CI doesn't need a live database container just to run unit tests.
 """
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -21,7 +22,12 @@ def override_get_db():
         db.close()
 
 
-app.dependency_overrides[get_db] = override_get_db
+@pytest.fixture(autouse=True, scope="module")
+def setup_database():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
 client = TestClient(app)
 
 

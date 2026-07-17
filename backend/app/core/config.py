@@ -16,11 +16,14 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
 
     database_url: str = "postgresql://postgres:postgres@localhost:5432/voyagerai"
+    database_connect_timeout_seconds: int = 5
     redis_url: str = "redis://localhost:6379/0"
+    redis_session_ttl_seconds: int = 3600
 
     supabase_url: str = ""
     supabase_anon_key: str = ""
     supabase_jwt_secret: str = ""
+    supabase_jwt_audience: str = "authenticated"
 
     gemini_api_key: str = ""
     openweather_api_key: str = ""

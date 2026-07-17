@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Navbar } from "@/components/Navbar";
+import { useAuth } from "@/contexts/AuthContext";
+import { Activity, Play, RotateCcw, AlertTriangle, CheckCircle, Database, Server, Clock, Compass } from "lucide-react";
 
 type HealthResponse = {
   status: string;
@@ -17,12 +21,16 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export default function Home() {
+  const { user, isLoading: isAuthLoading } = useAuth();
   const [pingState, setPingState] = useState<PingState>({ phase: "loading" });
+  const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  // Simulator State
   const [simStep, setSimStep] = useState<number>(0);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [simLog, setSimLog] = useState<string[]>([]);
-  const [refreshKey, setRefreshKey] = useState<number>(0);
 
+  // Ping Health Hook
   useEffect(() => {
     let cancelled = false;
     const startTime = performance.now();
@@ -53,331 +61,278 @@ export default function Home() {
     };
   }, [refreshKey]);
 
-  // Simulation steps for the Agent pipeline
-  const simulationSteps = [
-    {
-      title: "User Input & Intent",
-      desc: "Supervisor receives: 'Plan a 4-day trip to Tokyo, budget $1200'",
-      agent: "Supervisor Agent",
-      color: "border-purple-500 text-purple-400",
-      bg: "bg-purple-950/20",
-    },
-    {
-      title: "Transport & Routing",
-      desc: "Logistics Agent retrieves flights (Amadeus API) & optimizes routes",
-      agent: "Logistics Agent",
-      color: "border-blue-500 text-blue-400",
-      bg: "bg-blue-950/20",
-    },
-    {
-      title: "Lodging Discovery",
-      desc: "Accommodation Agent queries stays matching budget restrictions",
-      agent: "Accommodation Agent",
-      color: "border-teal-500 text-teal-400",
-      bg: "bg-teal-950/20",
-    },
-    {
-      title: "Local Experiences",
-      desc: "Experience Agent checks top landmarks & food via Google Places API",
-      agent: "Experience Agent",
-      color: "border-amber-500 text-amber-400",
-      bg: "bg-amber-950/20",
-    },
-    {
-      title: "Consolidated Plan",
-      desc: "Supervisor validates constraint satisfaction & compiles markdown plan",
-      agent: "Supervisor Agent",
-      color: "border-emerald-500 text-emerald-400",
-      bg: "bg-emerald-950/20",
-    },
-  ];
-
-  const startSimulation = () => {
+  // Simulator Handler
+  const runSimulation = async () => {
     if (isSimulating) return;
     setIsSimulating(true);
+    setSimStep(1);
+    setSimLog(["[Coordinator] Received request: 'Plan a 4-day trip to Tokyo within $1200'"]);
+
+    const steps = [
+      {
+        step: 2,
+        log: "✔ [Logistics Agent] Scanning flight paths and schedules to HND/NRT. Best deal found: $580 roundtrip.",
+      },
+      {
+        step: 3,
+        log: "✔ [Accommodation Agent] Querying hotel vacancies in Shibuya. Found boutique hostel at $65/night.",
+      },
+      {
+        step: 4,
+        log: "✔ [Experiences Agent] Curation complete: Senso-ji temple, Shibuya Crossing, and culinary ramen tour.",
+      },
+      {
+        step: 5,
+        log: "✔ [Coordinator] Feasibility checks complete. Aggregating final day-by-day markdown...",
+      },
+    ];
+
+    for (const item of steps) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      setSimStep(item.step);
+      setSimLog((prev) => [...prev, item.log]);
+    }
+    setIsSimulating(false);
+  };
+
+  const resetSimulation = () => {
     setSimStep(0);
-    setSimLog(["[Orchestrator] Received user prompt. Parsing criteria..."]);
-
-    const runNextStep = (step: number) => {
-      if (step >= simulationSteps.length) {
-        setIsSimulating(false);
-        setSimLog((prev) => [...prev, "✔ Itinerary generated successfully!"]);
-        return;
-      }
-
-      setSimStep(step + 1);
-      const stepMessages = [
-        "[Logistics] Fetching flights from LAX to HND. Found optimal route at $580 roundtrip.",
-        "[Accommodation] Searching stays. Found clean boutique hostel in Shibuya, $65/night.",
-        "[Experiences] Mapping daily activities: Day 1: Senso-ji temple, Day 2: Shibuya Crossing & Meiji Shrine.",
-        "[Orchestrator] Budget verified ($840/1200 limit). Structuring daily itinerary...",
-      ];
-
-      if (step < stepMessages.length) {
-        setSimLog((prev) => [...prev, stepMessages[step]]);
-      }
-
-      setTimeout(() => runNextStep(step + 1), 2200);
-    };
-
-    setTimeout(() => runNextStep(0), 1800);
+    setSimLog([]);
+    setIsSimulating(false);
   };
 
   return (
-    <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sansSelection selection:bg-indigo-500/30">
-      {/* Header and Background Glows */}
-      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
+    <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans flex flex-col">
+      <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
-      <header className="border-b border-slate-800/80 bg-slate-950/40 backdrop-blur-md sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                VoyagerAI
-              </h1>
-              <p className="text-[10px] text-indigo-400 font-mono tracking-wider uppercase">Multi-Agent Planner</p>
-            </div>
-          </div>
+      <Navbar />
 
-          <div className="flex items-center gap-4">
-            <span className="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700/50">
-              Week 2 Milestone
+      <div className="max-w-6xl w-full mx-auto px-6 py-10 flex-1 flex flex-col space-y-10">
+        
+        {/* Welcome Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-slate-900/40 border border-slate-800/80 rounded-3xl p-6 backdrop-blur-sm">
+          <div className="space-y-2">
+            <span className="text-[10px] font-mono tracking-wider uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full">
+              Week 3 Milestone Complete
             </span>
+            <h2 className="text-xl font-bold text-white mt-2">VoyagerAI Orchestrator</h2>
+            <p className="text-sm text-slate-400 max-w-xl">
+              {user
+                ? "You are signed in! Start orchestrating your travel conversations in the Dashboard."
+                : "Create a mock or real account to start building custom day-by-day itineraries with autonomous agents."}
+            </p>
+          </div>
+          <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="p-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-all border border-slate-700/60"
-              title="Refresh Infrastructure Status"
+              className="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white transition-all border border-slate-700/60"
+              title="Ping backend status"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 1121.21 8H17" />
-              </svg>
+              <RotateCcw className="w-4 h-4" />
             </button>
+            {!isAuthLoading && (
+              <Link
+                href={user ? "/trips" : "/login"}
+                className="px-6 py-3 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 font-semibold text-sm text-white rounded-xl shadow-lg shadow-indigo-500/20 transition-all whitespace-nowrap"
+              >
+                {user ? "Go to Dashboard →" : "Sign In to Plan →"}
+              </Link>
+            )}
           </div>
         </div>
-      </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-10 space-y-10">
         {/* Section 1: System Status */}
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-300 flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-indigo-500 rounded-full" />
-            Infrastructure Connection Status
-          </h2>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <Activity className="w-4.5 h-4.5 text-indigo-400" />
+            System Status
+          </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {/* API Health */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-sm relative overflow-hidden transition-all hover:border-slate-700/80">
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">FastAPI Endpoint</span>
-                <span className="text-[10px] text-slate-500 font-mono">PORT 8000</span>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Backend Gateway */}
+            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+              <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400">
+                <Server className="w-5 h-5" />
               </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <span className="text-2xl font-bold font-mono">/health</span>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                {pingState.phase === "loading" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-600 animate-pulse" />
-                    <span className="text-sm text-slate-500">Pinging backend...</span>
-                  </>
+              <div className="space-y-1">
+                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">FastAPI Gateway</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
+                {pingState.phase === "error" && (
+                  <span className="text-xs text-red-400 flex items-center gap-1.5 mt-1 font-semibold">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Offline
+                  </span>
                 )}
                 {pingState.phase === "success" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping absolute" />
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-sm font-medium text-emerald-400">API UP ({pingState.latency}ms)</span>
-                  </>
-                )}
-                {pingState.phase === "error" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                    <span className="text-sm font-medium text-red-400">UNREACHABLE</span>
-                  </>
+                  <span className="text-xs text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
+                    <CheckCircle className="w-3.5 h-3.5" /> Connected
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* Database */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-sm relative overflow-hidden transition-all hover:border-slate-700/80">
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Database Status</span>
-                <span className="text-[10px] text-slate-500 font-mono">SQLite (Local)</span>
+            {/* Database Layer */}
+            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+              <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
+                <Database className="w-5 h-5" />
               </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <span className="text-2xl font-bold font-mono">voyagerai.db</span>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                {pingState.phase === "loading" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-600 animate-pulse" />
-                    <span className="text-sm text-slate-500">Verifying DB connection...</span>
-                  </>
+              <div className="space-y-1">
+                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Database Connection</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
+                {pingState.phase === "error" && (
+                  <span className="text-xs text-red-400 flex items-center gap-1.5 mt-1 font-semibold">
+                    <AlertTriangle className="w-3.5 h-3.5" /> Unreachable
+                  </span>
                 )}
                 {pingState.phase === "success" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                    <span className="text-sm font-medium text-emerald-400">
-                      DB {pingState.data.database.toUpperCase()}
-                    </span>
-                  </>
-                )}
-                {pingState.phase === "error" && (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
-                    <span className="text-sm font-medium text-red-400">DB DISCONNECTED</span>
-                  </>
+                  <span className="text-xs text-emerald-400 flex items-center gap-1.5 mt-1 font-semibold">
+                    <CheckCircle className="w-3.5 h-3.5" /> {pingState.data.database}
+                  </span>
                 )}
               </div>
             </div>
 
-            {/* Redis Cache */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-sm relative overflow-hidden transition-all hover:border-slate-700/80">
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">CADASTRAL CACHE</span>
-                <span className="text-[10px] text-slate-500 font-mono">Redis</span>
+            {/* API Latency */}
+            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+              <div className="p-3 rounded-xl bg-teal-500/10 text-teal-400">
+                <Clock className="w-5 h-5" />
               </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <span className="text-2xl font-bold font-mono">6379</span>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
-                <span className="text-sm font-medium text-amber-400">DOCKER IDLE (LOCAL BYPASS)</span>
-              </div>
-            </div>
-
-            {/* environment */}
-            <div className="bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 backdrop-blur-sm relative overflow-hidden transition-all hover:border-slate-700/80">
-              <div className="flex justify-between items-start mb-3">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wider">Active Environment</span>
-                <span className="text-[10px] text-slate-500 font-mono">APP MODE</span>
-              </div>
-              <div className="flex items-baseline gap-2 mt-2">
-                <span className="text-2xl font-bold font-mono text-indigo-400">development</span>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500" />
-                <span className="text-sm font-medium text-indigo-400">CORS ALLOWED (:3000)</span>
+              <div className="space-y-1">
+                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">API Latency</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
+                {pingState.phase === "error" && <span className="text-xs text-slate-500">N/A</span>}
+                {pingState.phase === "success" && (
+                  <span className="text-xs text-teal-400 font-semibold mt-1 block">
+                    {pingState.latency} ms
+                  </span>
+                )}
               </div>
             </div>
           </div>
         </section>
 
-        {/* Section 2: Interactive Demo Simulator */}
-        <section className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-300 flex items-center gap-2">
-                <span className="w-1.5 h-4 bg-purple-500 rounded-full" />
-                Interactive Core Pipeline Simulator (Proposed)
-              </h2>
-              <p className="text-sm text-slate-400 mt-1">
-                Visualize how VoyagerAI will resolve your query by routing through the agent hierarchy (coming in Weeks 3 & 4).
-              </p>
-            </div>
-            <div>
+        {/* Section 2: Pipeline Simulator */}
+        <section className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+              <Compass className="w-4.5 h-4.5 text-indigo-400" />
+              Interactive Multi-Agent Simulation
+            </h3>
+            <div className="flex items-center gap-2">
+              {simStep > 0 && (
+                <button
+                  onClick={resetSimulation}
+                  className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white text-xs transition-all flex items-center gap-1.5"
+                >
+                  <RotateCcw className="w-3 h-3" /> Reset
+                </button>
+              )}
               <button
-                onClick={startSimulation}
+                onClick={runSimulation}
                 disabled={isSimulating}
-                className="w-full md:w-auto px-5 py-2.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-indigo-900/50 disabled:to-purple-900/50 disabled:cursor-not-allowed font-medium text-sm text-white rounded-xl shadow-lg shadow-indigo-500/25 transition-all flex items-center justify-center gap-2"
+                className="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-950/45 disabled:text-slate-500 disabled:cursor-not-allowed text-xs text-white rounded-lg transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/15"
               >
-                {isSimulating ? (
-                  <>
-                    <svg className="animate-spin -ml-1 mr-3 h-4.5 w-4.5 text-white" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                    </svg>
-                    Executing Pipeline...
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4.5 h-4.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Run Sample Agent Query
-                  </>
-                )}
+                <Play className="w-3 h-3" /> {isSimulating ? "Simulating..." : "Run Offline Simulation"}
               </button>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Visual Agent Workflow Flowchart */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 relative">
-                <div className="space-y-4 relative">
-                  {simulationSteps.map((step, idx) => {
-                    const isStepActive = simStep === idx + 1;
-                    const isStepCompleted = simStep > idx + 1;
-                    return (
-                      <div
-                        key={idx}
-                        className={`flex items-start gap-4 p-4 rounded-xl border transition-all duration-500 ${
-                          isStepActive
-                            ? `${step.color} ${step.bg} scale-[1.01] shadow-md border-opacity-100`
-                            : isStepCompleted
-                            ? "border-slate-800/50 bg-slate-900/10 text-slate-500 opacity-60"
-                            : "border-slate-800/30 text-slate-600 opacity-40"
-                        }`}
-                      >
-                        <div className="flex flex-col items-center">
-                          <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm ${
-                            isStepActive
-                              ? "bg-slate-900 animate-pulse border-indigo-400 text-indigo-400"
-                              : isStepCompleted
-                              ? "bg-slate-950 border-slate-700 text-slate-500"
-                              : "bg-slate-950 border-slate-800 text-slate-700"
-                          }`}>
-                            {idx + 1}
-                          </div>
-                          {idx < simulationSteps.length - 1 && (
-                            <div className={`w-0.5 h-10 my-1 ${
-                              isStepCompleted ? "bg-indigo-900/40" : "bg-slate-900/20"
-                            }`} />
-                          )}
-                        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            
+            {/* Visual Agent Steps Grid */}
+            <div className="bg-slate-900/35 border border-slate-850 rounded-3xl p-6 space-y-4">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Execution Flow Nodes</h4>
+              
+              <div className="space-y-4">
+                {/* Node 1 */}
+                <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
+                  simStep >= 1 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    simStep >= 1 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                  }`}>
+                    01
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-200">Coordinator Agent Node</h5>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Accepts query, locks graph schema parameters, and boots up sub-agent states.
+                    </p>
+                  </div>
+                </div>
 
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-sm text-slate-200">{step.title}</span>
-                            <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400">
-                              {step.agent}
-                            </span>
-                          </div>
-                          <p className="text-xs leading-relaxed text-slate-400">{step.desc}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
+                {/* Node 2 */}
+                <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
+                  simStep >= 2 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    simStep >= 2 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                  }`}>
+                    02
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-200">Logistics & Accommodation Nodes</h5>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Resolves flights routing schedules and lodging vacancies dynamically.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Node 3 */}
+                <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
+                  simStep >= 3 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    simStep >= 3 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                  }`}>
+                    03
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-200">Experiences & Budget Nodes</h5>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Parses sight-seeing activities and runs strict limit calculations.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Node 4 */}
+                <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
+                  simStep >= 5 ? "bg-slate-900/60 border-emerald-500/25" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                }`}>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
+                    simStep >= 5 ? "bg-emerald-500/15 text-emerald-450 border border-emerald-500/30" : "bg-slate-800 text-slate-500"
+                  }`}>
+                    04
+                  </div>
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-200">Final Compilation Node</h5>
+                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                      Aggregates metrics and prints the finalized Day-by-Day travel itinerary.
+                    </p>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Execution Console Terminal Logs */}
+            {/* Output Logs Console */}
             <div className="flex flex-col space-y-4">
-              <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-5 flex-1 flex flex-col font-mono relative overflow-hidden">
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500" />
-                <div className="flex items-center gap-2 text-xs text-slate-500 border-b border-slate-800/60 pb-3 mb-4">
-                  <span className="w-3 h-3 rounded-full bg-red-500/20 border border-red-500/50" />
-                  <span className="w-3 h-3 rounded-full bg-amber-500/20 border border-amber-500/50" />
-                  <span className="w-3 h-3 rounded-full bg-green-500/20 border border-green-500/50" />
-                  <span className="ml-2">agent_orchestration_logs.sh</span>
+              <div className="bg-slate-950 border border-slate-850 rounded-3xl p-6 flex-1 flex flex-col font-mono relative overflow-hidden min-h-[300px]">
+                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
+                <div className="flex items-center gap-2 text-slate-500 text-[10px] border-b border-slate-900 pb-3 mb-4 select-none">
+                  <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/30" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/30" />
+                  <span className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/30" />
+                  <span className="ml-2">agent_execution_logs.log</span>
                 </div>
 
-                <div className="flex-1 space-y-2.5 overflow-y-auto text-xs scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+                <div className="flex-1 space-y-3 overflow-y-auto text-xs scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
                   {simLog.length === 0 && (
-                    <div className="text-slate-600 italic">Console idle. Hit &quot;Run Sample Agent Query&quot; to start simulation.</div>
+                    <div className="text-slate-600 italic select-none">Console idle. Hit &quot;Run Offline Simulation&quot; to test graph transitions.</div>
                   )}
                   {simLog.map((log, index) => (
                     <div key={index} className="flex gap-2">
-                      <span className="text-slate-600 select-none">&gt;</span>
-                      <span className={log.startsWith("✔") ? "text-emerald-400 font-semibold" : "text-slate-300"}>
+                      <span className="text-indigo-500 select-none">&gt;</span>
+                      <span className={log.startsWith("✔") ? "text-emerald-400 font-semibold" : "text-slate-350"}>
                         {log}
                       </span>
                     </div>
@@ -385,32 +340,29 @@ export default function Home() {
                 </div>
               </div>
 
-              {/* Sample output preview */}
               {simStep === 5 && !isSimulating && (
-                <div className="bg-slate-900/60 border border-emerald-500/40 rounded-2xl p-5 animate-fade-in space-y-3">
-                  <div className="flex items-center gap-2 text-emerald-400">
-                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    <span className="text-sm font-semibold">Itinerary Mock Complete!</span>
+                <div className="bg-slate-900/50 border border-emerald-500/30 rounded-2xl p-5 animate-fade-in space-y-2">
+                  <div className="flex items-center gap-2 text-emerald-450 text-xs font-semibold">
+                    <CheckCircle className="w-4 h-4" /> Itinerary Compiled Successfully!
                   </div>
-                  <div className="text-xs text-slate-300 space-y-1">
-                    <p className="font-semibold text-slate-200">🗼 Tokyo 4-Day Plan Overview:</p>
-                    <p>• Flight: Roundtrip LAX-HND ($580)</p>
+                  <div className="text-[11px] text-slate-400 space-y-1 mt-2">
+                    <p className="font-semibold text-slate-300">🗼 Tokyo 4-Day Plan Overview:</p>
+                    <p>• Flight: Roundtrip NRT ($580)</p>
                     <p>• Stay: Shibuya Boutique Stay ($260)</p>
-                    <p>• Buffer remaining: $360 for dining/shopping</p>
+                    <p>• Buffer remaining: $360 for shopping & dining</p>
                   </div>
                 </div>
               )}
             </div>
+
           </div>
         </section>
+
       </div>
 
-      <footer className="border-t border-slate-900 py-6 mt-16 text-center text-xs text-slate-600">
-        <p>© 2026 VoyagerAI. Built for Multi-Agent Travel Planner Skeleton Demo.</p>
+      <footer className="border-t border-slate-900/60 py-6 text-center text-xs text-slate-600 bg-slate-950/20 mt-12">
+        <p>© 2026 VoyagerAI. Autonomous Multi-Agent AI Travel Planner.</p>
       </footer>
     </main>
   );
 }
-
