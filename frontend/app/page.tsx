@@ -33,13 +33,21 @@ export default function Home() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [tripsLoading, setTripsLoading] = useState(false);
 
-  // Chat and Itinerary State
+  // Workspace Tabs State
+  const [activeTab, setActiveTab] = useState<"chat" | "simulator">("chat");
+
+  // Chat State
   const [messages, setMessages] = useState<any[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [itineraries, setItineraries] = useState<any[]>([]);
   const [itinerariesLoading, setItinerariesLoading] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [activeLogs, setActiveLogs] = useState<string[]>([]);
+
+  // Simulator State
+  const [simStep, setSimStep] = useState<number>(0);
+  const [isSimulating, setIsSimulating] = useState<boolean>(false);
+  const [simLog, setSimLog] = useState<string[]>([]);
 
   // 1. Auth Hook
   useEffect(() => {
@@ -162,6 +170,9 @@ export default function Home() {
     setMessages([]);
     setItineraries([]);
     setActiveLogs([]);
+    setSimStep(0);
+    setIsSimulating(false);
+    setSimLog([]);
   };
 
   const handleSelectTrip = (trip: any) => {
@@ -171,6 +182,9 @@ export default function Home() {
     setActiveLogs([]);
     setInputMessage("");
     setIsSending(false);
+    setSimStep(0);
+    setIsSimulating(false);
+    setSimLog([]);
     fetchMessages(trip.id);
     fetchItineraries(trip.id);
   };
@@ -307,6 +321,76 @@ export default function Home() {
     }
   };
 
+  // Simulator steps
+  const simulationSteps = [
+    {
+      title: "User Input & Intent",
+      desc: `Supervisor receives: 'Plan a 4-day trip to ${selectedTrip?.destination || "Destination"}, budget $1200'`,
+      agent: "Supervisor Agent",
+      color: "border-purple-500 text-purple-400",
+      bg: "bg-purple-950/20",
+    },
+    {
+      title: "Transport & Routing",
+      desc: `Logistics Agent retrieves flights (Amadeus API) & optimizes routes to ${selectedTrip?.destination || "Destination"}`,
+      agent: "Logistics Agent",
+      color: "border-blue-500 text-blue-400",
+      bg: "bg-blue-950/20",
+    },
+    {
+      title: "Lodging Discovery",
+      desc: `Accommodation Agent queries stays matching budget restrictions in ${selectedTrip?.destination || "Destination"}`,
+      agent: "Accommodation Agent",
+      color: "border-teal-500 text-teal-400",
+      bg: "bg-teal-950/20",
+    },
+    {
+      title: "Local Experiences",
+      desc: `Experience Agent checks top landmarks & food via Google Places API in ${selectedTrip?.destination || "Destination"}`,
+      agent: "Experience Agent",
+      color: "border-amber-500 text-amber-400",
+      bg: "bg-amber-950/20",
+    },
+    {
+      title: "Consolidated Plan",
+      desc: `Supervisor validates constraint satisfaction & compiles markdown plan for ${selectedTrip?.destination || "Destination"}`,
+      agent: "Supervisor Agent",
+      color: "border-emerald-500 text-emerald-400",
+      bg: "bg-emerald-950/20",
+    },
+  ];
+
+  const startSimulation = () => {
+    if (isSimulating) return;
+    setIsSimulating(true);
+    setSimStep(0);
+    setSimLog(["[Orchestrator] Received user prompt. Parsing criteria..."]);
+
+    const runNextStep = (step: number) => {
+      if (step >= simulationSteps.length) {
+        setIsSimulating(false);
+        setSimLog((prev) => [...prev, "✔ Itinerary generated successfully!"]);
+        return;
+      }
+
+      setSimStep(step + 1);
+      const stepMessages = [
+        `[Logistics] Fetching flights to ${selectedTrip?.destination || "Destination"}. Found optimal route.`,
+        `[Accommodation] Searching stays. Found clean boutique hotel in central ${selectedTrip?.destination || "Destination"}.`,
+        `[Experiences] Mapping daily activities inside ${selectedTrip?.destination || "Destination"}.`,
+        `[Orchestrator] Budget verified. Structuring daily itinerary...`,
+      ];
+
+      if (step < stepMessages.length) {
+        setSimLog((prev) => [...prev, stepMessages[step]]);
+      }
+
+      setTimeout(() => runNextStep(step + 1), 2200);
+    };
+
+    setTimeout(() => runNextStep(0), 1800);
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center">
@@ -430,7 +514,7 @@ export default function Home() {
           </div>
         </aside>
 
-        {/* Center Panel: Active Chat Workspace */}
+        {/* Center Panel: Workspace */}
         <div className="flex-1 flex flex-col min-w-0 bg-slate-950/20 border border-slate-900 rounded-3xl overflow-hidden relative">
           {!selectedTrip ? (
             /* Empty State */
@@ -442,95 +526,261 @@ export default function Home() {
               </p>
             </div>
           ) : (
-            /* Real-Time Chat Workspace */
+            /* Selected Workspace */
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* Chat Header */}
-              <div className="p-5 border-b border-slate-900 bg-slate-900/10 flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-indigo-400" />
-                  <span className="font-semibold text-sm text-slate-200">{selectedTrip.destination}</span>
-                  <span className="text-[9px] font-mono uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded ml-2">
-                    {selectedTrip.status}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${pingState.phase === "success" ? "bg-emerald-500" : "bg-red-500"}`} />
-                  <span className="text-[10px] text-slate-500 font-mono">API STATUS</span>
-                </div>
+              
+              {/* Workspace Navigation Tabs */}
+              <div className="flex border-b border-slate-900 bg-slate-900/10">
+                <button
+                  onClick={() => setActiveTab("chat")}
+                  className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase border-b-2 transition-all ${
+                    activeTab === "chat"
+                      ? "border-indigo-500 text-indigo-400 bg-indigo-500/5"
+                      : "border-transparent text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  💬 Real-Time Chat Workspace
+                </button>
+                <button
+                  onClick={() => setActiveTab("simulator")}
+                  className={`flex-1 py-3 text-xs font-semibold tracking-wider uppercase border-b-2 transition-all ${
+                    activeTab === "simulator"
+                      ? "border-indigo-500 text-indigo-400 bg-indigo-500/5"
+                      : "border-transparent text-slate-500 hover:text-slate-300"
+                  }`}
+                >
+                  📊 Agent Pipeline Simulator
+                </button>
               </div>
 
-              {/* Messages List Container */}
-              <div className="flex-1 overflow-y-auto p-5 space-y-4">
-                {messages.length === 0 && !isSending && (
-                  <div className="text-center py-12 text-slate-600 text-xs italic">
-                    Send a message to begin planning. E.g., &quot;Suggest local attractions and sights.&quot;
+              {activeTab === "chat" ? (
+                /* Tab 1: Real-Time Chat Workspace */
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* Chat Header */}
+                  <div className="p-5 border-b border-slate-900 bg-slate-900/10 flex justify-between items-center">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-indigo-400" />
+                      <span className="font-semibold text-sm text-slate-200">{selectedTrip.destination}</span>
+                      <span className="text-[9px] font-mono uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded ml-2">
+                        {selectedTrip.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2.5 h-2.5 rounded-full ${pingState.phase === "success" ? "bg-emerald-500" : "bg-red-500"}`} />
+                      <span className="text-[10px] text-slate-500 font-mono">API STATUS</span>
+                    </div>
                   </div>
-                )}
 
-                {messages.map((msg) => {
-                  const isUser = msg.sender === "user";
-                  return (
-                    <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed border shadow-sm ${
-                          isUser
-                            ? "bg-indigo-600/10 border-indigo-500/30 text-slate-200"
-                            : msg.isError
-                            ? "bg-red-950/20 border-red-500/20 text-red-200"
-                            : "bg-slate-900/60 border-slate-800/80 text-slate-300"
-                        }`}
+                  {/* Messages List Container */}
+                  <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                    {messages.length === 0 && !isSending && (
+                      <div className="text-center py-12 text-slate-600 text-xs italic">
+                        Send a message to begin planning. E.g., &quot;Suggest local attractions and sights.&quot;
+                      </div>
+                    )}
+
+                    {messages.map((msg) => {
+                      const isUser = msg.sender === "user";
+                      // Parse timestamp safely
+                      const msgDate = msg.created_at ? new Date(msg.created_at) : new Date();
+                      const timeStr = isNaN(msgDate.getTime()) ? "" : msgDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div key={msg.id} className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+                          <div
+                            className={`max-w-[80%] rounded-2xl p-4 text-sm leading-relaxed border shadow-sm ${
+                              isUser
+                                ? "bg-indigo-600/10 border-indigo-500/30 text-slate-200"
+                                : msg.isError
+                                ? "bg-red-950/20 border-red-500/20 text-red-200"
+                                : "bg-slate-900/60 border-slate-800/80 text-slate-300"
+                            }`}
+                          >
+                            <div className="whitespace-pre-line">{msg.content || "..."}</div>
+                            {timeStr && (
+                              <div className="text-[9px] text-slate-500 text-right mt-1.5 font-mono">
+                                {timeStr}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+
+                    {/* Sub-Agent Live Trace Logs Box */}
+                    {isSending && activeLogs.length > 0 && (
+                      <div className="border border-indigo-500/20 bg-indigo-950/10 rounded-2xl p-4 space-y-2 animate-fade-in">
+                        <div className="flex items-center gap-2 text-xs text-indigo-400 font-mono font-semibold border-b border-indigo-500/15 pb-2">
+                          <Terminal className="w-3.5 h-3.5" />
+                          <span>agent_orchestrator_traces.log</span>
+                          <Loader className="w-3.5 h-3.5 animate-spin ml-auto" />
+                        </div>
+                        <div className="space-y-1.5 font-mono text-[11px] text-slate-400">
+                          {activeLogs.map((log, idx) => (
+                            <div key={idx} className="flex gap-2">
+                              <span className="text-slate-600 select-none">&gt;</span>
+                              <span>{log}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Input Box Form */}
+                  <form onSubmit={sendMessage} className="p-5 border-t border-slate-900 bg-slate-900/10 flex gap-3">
+                    <input
+                      type="text"
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      placeholder={isSending ? "Planning suite executing..." : "E.g., Suggest 4 days of history tours..."}
+                      disabled={isSending}
+                      className="flex-1 bg-slate-950 border border-slate-900 rounded-xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
+                      required
+                    />
+                    <button
+                      type="submit"
+                      disabled={isSending || !inputMessage.trim()}
+                      className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-950 disabled:cursor-not-allowed font-medium text-white rounded-xl shadow-lg shadow-indigo-500/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <Send className="w-4 h-4" />
+                    </button>
+                  </form>
+                </div>
+              ) : (
+                /* Tab 2: Agent Pipeline Simulator */
+                <div className="flex-1 overflow-y-auto p-6 space-y-6">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h2 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                        <span className="w-1.5 h-3.5 bg-purple-500 rounded-full" />
+                        Interactive Core Pipeline Simulator (Proposed)
+                      </h2>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Visualize how VoyagerAI will resolve your query for <strong className="text-indigo-400">{selectedTrip.destination}</strong>.
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        onClick={startSimulation}
+                        disabled={isSimulating}
+                        className="w-full md:w-auto px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-indigo-900/50 disabled:to-purple-900/50 disabled:cursor-not-allowed font-medium text-xs text-white rounded-xl shadow-md transition-all flex items-center justify-center gap-2"
                       >
-                        {/* Message Content */}
-                        <div className="whitespace-pre-line">{msg.content || "..."}</div>
-                        
-                        {/* Timestamp */}
-                        <div className="text-[9px] text-slate-500 text-right mt-1.5 font-mono">
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {isSimulating ? (
+                          <>
+                            <Loader className="w-3.5 h-3.5 animate-spin" />
+                            Executing Pipeline...
+                          </>
+                        ) : (
+                          <>
+                            <Compass className="w-3.5 h-3.5" />
+                            Run Sample Agent Query
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Visual Agent Workflow Flowchart */}
+                    <div className="lg:col-span-2 space-y-4">
+                      <div className="bg-slate-900/40 border border-slate-800/80 rounded-2xl p-6 relative">
+                        <div className="space-y-4 relative">
+                          {simulationSteps.map((step, idx) => {
+                            const isStepActive = simStep === idx + 1;
+                            const isStepCompleted = simStep > idx + 1;
+                            return (
+                              <div
+                                key={idx}
+                                className={`flex items-start gap-4 p-4 rounded-xl border transition-all duration-500 ${
+                                  isStepActive
+                                    ? `${step.color} ${step.bg} scale-[1.01] shadow-md border-opacity-100`
+                                    : isStepCompleted
+                                    ? "border-slate-800/50 bg-slate-900/10 text-slate-500 opacity-60"
+                                    : "border-slate-800/30 text-slate-600 opacity-40"
+                                }`}
+                              >
+                                <div className="flex flex-col items-center">
+                                  <div className={`w-8 h-8 rounded-full border flex items-center justify-center font-bold text-sm ${
+                                    isStepActive
+                                      ? "bg-slate-950 animate-pulse border-indigo-400 text-indigo-400"
+                                      : isStepCompleted
+                                      ? "bg-slate-950 border-slate-700 text-slate-500"
+                                      : "bg-slate-950 border-slate-800 text-slate-700"
+                                  }`}>
+                                    {idx + 1}
+                                  </div>
+                                  {idx < simulationSteps.length - 1 && (
+                                    <div className={`w-0.5 h-10 my-1 ${
+                                      isStepCompleted ? "bg-indigo-900/40" : "bg-slate-900/20"
+                                    }`} />
+                                  )}
+                                </div>
+
+                                <div className="space-y-1">
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-semibold text-sm text-slate-200">{step.title}</span>
+                                    <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-950 text-slate-400">
+                                      {step.agent}
+                                    </span>
+                                  </div>
+                                  <p className="text-xs leading-relaxed text-slate-400">{step.desc}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
                     </div>
-                  );
-                })}
 
-                {/* Sub-Agent Live Trace Logs Box */}
-                {isSending && activeLogs.length > 0 && (
-                  <div className="border border-indigo-500/20 bg-indigo-950/10 rounded-2xl p-4 space-y-2 animate-fade-in">
-                    <div className="flex items-center gap-2 text-xs text-indigo-400 font-mono font-semibold border-b border-indigo-500/15 pb-2">
-                      <Terminal className="w-3.5 h-3.5" />
-                      <span>agent_orchestrator_traces.log</span>
-                      <Loader className="w-3.5 h-3.5 animate-spin ml-auto" />
-                    </div>
-                    <div className="space-y-1.5 font-mono text-[11px] text-slate-400">
-                      {activeLogs.map((log, idx) => (
-                        <div key={idx} className="flex gap-2">
-                          <span className="text-slate-600 select-none">&gt;</span>
-                          <span>{log}</span>
+                    {/* Execution Console Terminal Logs */}
+                    <div className="flex flex-col space-y-4">
+                      <div className="bg-slate-950 border border-slate-800/80 rounded-2xl p-5 flex-1 flex flex-col font-mono relative overflow-hidden min-h-[300px]">
+                        <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-teal-500" />
+                        <div className="flex items-center gap-2 text-xs text-slate-500 border-b border-slate-800/60 pb-3 mb-4">
+                          <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/50" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-amber-500/20 border border-amber-500/50" />
+                          <span className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/50" />
+                          <span className="ml-2 text-[10px]">agent_orchestration_logs.sh</span>
                         </div>
-                      ))}
+
+                        <div className="flex-1 space-y-2.5 overflow-y-auto text-[11px] text-slate-300">
+                          {simLog.length === 0 && (
+                            <div className="text-slate-600 italic">Console idle. Hit &quot;Run Sample Agent Query&quot; to start simulation.</div>
+                          )}
+                          {simLog.map((log, index) => (
+                            <div key={index} className="flex gap-2">
+                              <span className="text-slate-600 select-none">&gt;</span>
+                              <span className={log.startsWith("✔") ? "text-emerald-400 font-semibold" : "text-slate-300"}>
+                                {log}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Itinerary Summary Preview Card */}
+                      {simStep === 5 && !isSimulating && (
+                        <div className="bg-slate-900/60 border border-emerald-500/40 rounded-2xl p-5 animate-fade-in space-y-3">
+                          <div className="flex items-center gap-2 text-emerald-400">
+                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="text-sm font-semibold">Itinerary Mock Complete!</span>
+                          </div>
+                          <div className="text-xs text-slate-300 space-y-1">
+                            <p className="font-semibold text-slate-200">🗼 {selectedTrip.destination} 4-Day Plan Overview:</p>
+                            <p>• Flight: Roundtrip Route ($580)</p>
+                            <p>• Stay: Boutique Central Stay ($260)</p>
+                            <p>• Buffer remaining: $360 for dining/shopping</p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
 
-              {/* Message Input Box Form */}
-              <form onSubmit={sendMessage} className="p-5 border-t border-slate-900 bg-slate-900/10 flex gap-3">
-                <input
-                  type="text"
-                  value={inputMessage}
-                  onChange={(e) => setInputMessage(e.target.value)}
-                  placeholder={isSending ? "Planning suite executing..." : "E.g., Suggest 4 days of history tours..."}
-                  disabled={isSending}
-                  className="flex-1 bg-slate-950 border border-slate-900 rounded-xl py-3 px-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all disabled:opacity-50"
-                  required
-                />
-                <button
-                  type="submit"
-                  disabled={isSending || !inputMessage.trim()}
-                  className="px-5 py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-950 disabled:cursor-not-allowed font-medium text-white rounded-xl shadow-lg shadow-indigo-500/10 transition-all flex items-center justify-center gap-2"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
             </div>
           )}
         </div>
@@ -558,7 +808,7 @@ export default function Home() {
                     <span>Day {it.day_number}</span>
                     <span className="text-[10px] text-slate-500 font-normal">{it.title}</span>
                   </div>
-                  <p className="text-slate-400 leading-relaxed font-sans">{it.description}</p>
+                  <p className="text-slate-400 leading-relaxed font-sans whitespace-pre-line">{it.description}</p>
                   
                   {/* Activities list */}
                   {it.activities && typeof it.activities === "object" && (

@@ -53,7 +53,7 @@ class ItineraryOut(BaseModel):
     day_number: int
     title: str
     description: str | None
-    activities: list | None
+    activities: dict | list | None
     created_at: datetime
 
     class Config:
