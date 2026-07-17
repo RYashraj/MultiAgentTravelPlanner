@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { signOut, getSessionToken, getUserEmail } from "../lib/supabase";
+import { LogOut, User } from "lucide-react";
 
 type HealthResponse = {
   status: string;
@@ -17,11 +20,24 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
 
 export default function Home() {
+  const router = useRouter();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [pingState, setPingState] = useState<PingState>({ phase: "loading" });
   const [simStep, setSimStep] = useState<number>(0);
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [simLog, setSimLog] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState<number>(0);
+
+  useEffect(() => {
+    const token = getSessionToken();
+    if (!token) {
+      router.push("/login");
+    } else {
+      setIsAuthenticated(true);
+      setUserEmail(getUserEmail());
+    }
+  }, [router]);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +68,11 @@ export default function Home() {
       cancelled = true;
     };
   }, [refreshKey]);
+
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
+  };
 
   // Simulation steps for the Agent pipeline
   const simulationSteps = [
@@ -123,6 +144,14 @@ export default function Home() {
     setTimeout(() => runNextStep(0), 1800);
   };
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-[#0b0f19] flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-indigo-500" />
+      </div>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sansSelection selection:bg-indigo-500/30">
       {/* Header and Background Glows */}
@@ -146,8 +175,21 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-4">
+            {userEmail && (
+              <span className="text-xs text-slate-400 bg-slate-900/80 border border-slate-800/80 px-3 py-1 rounded-full flex items-center gap-1.5">
+                <User className="w-3.5 h-3.5 text-indigo-400" />
+                {userEmail}
+              </span>
+            )}
+            <button
+              onClick={handleSignOut}
+              className="text-xs bg-red-950/20 hover:bg-red-900/30 text-red-200 border border-red-500/20 hover:border-red-500/40 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1.5 font-medium"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Sign Out
+            </button>
             <span className="text-xs bg-slate-800 text-slate-400 px-3 py-1 rounded-full border border-slate-700/50">
-              Week 2 Milestone
+              Week 3 Milestone
             </span>
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
