@@ -19,7 +19,7 @@ from app.api.v1 import health, trips
 from app.core.config import get_settings
 from app.db.base import Base
 from app.db.session import engine
-from app.db.models import User, Trip, Message
+from app.db.models import User, Trip, Message, Itinerary, AgentRun
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

@@ -1,3 +1,4 @@
+import pytest
 import uuid
 from fastapi.testclient import TestClient
 # pyrefly: ignore [missing-import]
@@ -29,7 +30,12 @@ def override_get_db():
 # Create tables in test DB
 Base.metadata.create_all(bind=test_engine)
 
-app.dependency_overrides[get_db] = override_get_db
+@pytest.fixture(autouse=True, scope="module")
+def setup_database():
+    app.dependency_overrides[get_db] = override_get_db
+    yield
+    app.dependency_overrides.pop(get_db, None)
+
 client = TestClient(app)
 
 # Use a mock authorization header for testing

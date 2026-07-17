@@ -2,7 +2,7 @@ import asyncio
 import json
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Generator
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.db.models import User, Trip, Message
+from app.agents.supervisor import SupervisorAgent
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -144,59 +145,38 @@ async def send_trip_message(
     db.commit()
     db.refresh(user_msg)
 
-    # 3. Generate a helpful travel advisor response
-    destination = trip.destination
-    ai_reply_text = (
-        f"Hi {current_user.full_name or 'there'}! 🌍 I am analyzing your request: '{message_in.content}' for your trip to {destination}.\n\n"
-        f"As your VoyagerAI Planner, I recommend starting with these highlights in {destination}:\n"
-        f"1. **Local Sightseeing**: Explore the historical landmarks and primary cultural districts.\n"
-        f"2. **Culinary Spots**: Experience top-rated local dining and street foods.\n"
-        f"3. **Stay**: Rest in a highly recommended boutique hotel central to transit.\n\n"
-        f"I am spinning up my Logistics and Experience Agents to draft a comprehensive budget-friendly itinerary. "
-        f"Let me know if you would like me to focus on specific flight times, hotel star ratings, or food options!"
-    )
+    # 3. Invoke SupervisorAgent to orchestrate and stream planning
+    agent = SupervisorAgent()
 
     if stream:
         # SSE Generator
         async def event_generator():
-            full_reply = ""
             # Yield user message details first to confirm receipt
             yield f"event: user_message\ndata: {json.dumps({'id': str(user_msg.id), 'content': user_msg.content, 'sender': 'user'})}\n\n"
             await asyncio.sleep(0.1)
 
-            # Yield assistant response word by word
-            words = ai_reply_text.split(" ")
-            for i, word in enumerate(words):
-                chunk = (word + " ") if i < len(words) - 1 else word
-                full_reply += chunk
-                yield f"event: message_chunk\ndata: {json.dumps({'content': chunk, 'sender': 'assistant'})}\n\n"
-                await asyncio.sleep(0.04)  # typing simulation speed
-            
-            # Write final assistant response to Database
-            assistant_msg = Message(
-                trip_id=trip_id,
-                sender="assistant",
-                content=ai_reply_text
-            )
-            db.add(assistant_msg)
-            db.commit()
-            db.refresh(assistant_msg)
-            
-            # Send completion signal
-            yield f"event: message_complete\ndata: {json.dumps({'id': str(assistant_msg.id), 'content': ai_reply_text, 'sender': 'assistant'})}\n\n"
+            async for step in agent.run_orchestration_stream(db, trip_id, message_in.content, current_user):
+                event_type = step["event"]
+                if event_type == "agent_log":
+                    data = {"agent": step["agent"], "content": step["content"]}
+                elif event_type == "message_chunk":
+                    data = {"content": step["content"], "sender": step["sender"]}
+                elif event_type == "message_complete":
+                    data = {"id": step["id"], "content": step["content"], "sender": step["sender"]}
+                else:
+                    data = step
+
+                yield f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
 
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     else:
-        # Save assistant message directly to Database
-        assistant_msg = Message(
-            trip_id=trip_id,
-            sender="assistant",
-            content=ai_reply_text
-        )
-        db.add(assistant_msg)
-        db.commit()
-        db.refresh(assistant_msg)
+        final_assistant_msg_content = ""
+        final_assistant_msg_id = None
+        async for step in agent.run_orchestration_stream(db, trip_id, message_in.content, current_user):
+            if step["event"] == "message_complete":
+                final_assistant_msg_content = step["content"]
+                final_assistant_msg_id = uuid.UUID(step["id"])
 
         return {
             "user_message": {
@@ -207,10 +187,10 @@ async def send_trip_message(
                 "created_at": user_msg.created_at
             },
             "assistant_message": {
-                "id": assistant_msg.id,
-                "trip_id": assistant_msg.trip_id,
-                "sender": assistant_msg.sender,
-                "content": assistant_msg.content,
-                "created_at": assistant_msg.created_at
+                "id": final_assistant_msg_id or uuid.uuid4(),
+                "trip_id": trip_id,
+                "sender": "assistant",
+                "content": final_assistant_msg_content,
+                "created_at": datetime.now(timezone.utc)
             }
         }
