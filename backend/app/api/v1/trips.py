@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.session import get_db
-from app.db.models import User, Trip, Message
+from app.db.models import User, Trip, Message, Itinerary
 from app.agents.supervisor import SupervisorAgent
 
 logger = logging.getLogger(__name__)
@@ -42,6 +42,18 @@ class MessageOut(BaseModel):
     trip_id: uuid.UUID
     sender: str
     content: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class ItineraryOut(BaseModel):
+    id: uuid.UUID
+    trip_id: uuid.UUID
+    day_number: int
+    title: str
+    description: str | None
+    activities: list | None
     created_at: datetime
 
     class Config:
@@ -106,6 +118,32 @@ def get_trip_messages(
     
     messages = db.query(Message).filter(Message.trip_id == trip_id).order_by(Message.created_at.ascii if hasattr(Message.created_at, "ascii") else Message.created_at).all()
     return messages
+
+
+@router.get("/{trip_id}/itineraries", response_model=list[ItineraryOut])
+def get_trip_itineraries(
+    trip_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Retrieves the generated day-by-day itineraries for a specific trip.
+    Guards access so users can only view their own trips' itineraries.
+    """
+    trip = db.query(Trip).filter(Trip.id == trip_id).first()
+    if not trip:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Trip not found"
+        )
+    if trip.user_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this trip's resources"
+        )
+    
+    itineraries = db.query(Itinerary).filter(Itinerary.trip_id == trip_id).order_by(Itinerary.day_number).all()
+    return itineraries
 
 
 @router.post("/{trip_id}/messages")
