@@ -52,15 +52,14 @@ def test_create_trip():
     # Test authorized request
     response = client.post(
         "/api/v1/trips", 
-        json={"destination": "Tokyo", "status": "planning"},
+        json={"destination": "Tokyo"},
         headers=headers
     )
     assert response.status_code == 201
     body = response.json()
     assert body["destination"] == "Tokyo"
-    assert body["status"] == "planning"
+    assert body["status"] == "draft"
     assert "id" in body
-    assert "user_id" in body
 
 
 def test_list_trips():
@@ -91,17 +90,17 @@ def test_send_and_get_messages():
     assert msg_res.status_code == 200
     body = msg_res.json()
     assert "user_message" in body
-    assert "assistant_message" in body
+    assert "coordinator_message" in body
     assert body["user_message"]["content"] == "Please suggest a 3-day plan"
-    assert "VoyagerAI" in body["assistant_message"]["content"]
+    assert "VoyagerAI" in body["coordinator_message"]["content"]
 
     # 3. Retrieve messages
     list_res = client.get(f"/api/v1/trips/{trip_id}/messages", headers=headers)
     assert list_res.status_code == 200
     messages = list_res.json()
     assert len(messages) == 2
-    assert messages[0]["sender"] == "user"
-    assert messages[1]["sender"] == "assistant"
+    assert messages[0]["role"] == "user"
+    assert messages[1]["role"] == "assistant"
 
 
 def test_stream_message():

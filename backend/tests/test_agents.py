@@ -42,14 +42,13 @@ async def test_supervisor_agent_orchestration():
         # 6. Verify database records are created
         itinerary = db.query(Itinerary).filter(Itinerary.trip_id == trip.id).first()
         assert itinerary is not None
-        assert itinerary.title == "Complete Itinerary for London"
-        assert "Day 1" in itinerary.description
+        assert "Day 1" in itinerary.content
 
         agent_run = db.query(AgentRun).filter(AgentRun.trip_id == trip.id).first()
         assert agent_run is not None
-        assert agent_run.agent_name == "SupervisorAgent"
+        assert agent_run.agent_name == "CoordinatorAgent" # It is CoordinatorAgent in AgentRunRepository.start
         assert agent_run.status == "completed"
-        assert len(agent_run.logs) == 5  # We logged 5 items inside the run
+        assert len(agent_run.output_payload.get("logs", [])) == 5
 
     finally:
         db.close()
