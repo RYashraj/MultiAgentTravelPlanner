@@ -30,3 +30,7 @@ npm-debug.log*
 # Backend static offline assets
 backend/app/static/
 
+# Teammate zip extraction & secrets
+MultiAgentTravelPlanner-main.zip
+MultiAgentTravelPlanner-main/
+keysiguess.txt
