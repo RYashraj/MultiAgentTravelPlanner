@@ -1,7 +1,12 @@
-import logging
-from typing import TypedDict, List, Dict, Any, Optional
+"""Week 3 Coordinator: a minimal, real LangGraph workflow.
 
-# Attempt to load native StateGraph, fallback to compat layer if imports fail
+The graph deliberately has one node. Week 4 will add Logistics,
+Accommodation, and Experience nodes to the same shared state contract.
+"""
+import logging
+from typing import TypedDict
+
+# Attempt to load native StateGraph, fallback to compat layer if imports fail due to DLL policies
 try:
     from langgraph.graph import StateGraph, START, END
 except (ImportError, Exception):
@@ -11,34 +16,30 @@ logger = logging.getLogger(__name__)
 
 class AgentState(TypedDict):
     destination: str
-    dates: Optional[str]
-    budget: Optional[str]
-    preferences: Optional[str]
-    agent_outputs: List[Dict[str, Any]]
-    messages: List[Dict[str, Any]]
+    dates: str | None
+    budget: str | None
+    preferences: list[str]
+    user_message: str
+    agent_outputs: dict[str, dict]
 
-def coordinator_node(state: AgentState) -> Dict[str, Any]:
-    """
-    Coordinator Agent Node: Echoes back a structured planning started response.
-    """
-    destination = state.get("destination", "your destination")
-    logger.info(f"[Coordinator Graph Node] Running node logic for {destination}")
-    
-    outputs = list(state.get("agent_outputs") or [])
-    outputs.append({
-        "agent": "Coordinator Agent",
-        "content": f"[Coordinator] Planning started for destination: {destination}. Defining routing schema."
-    })
-    
-    return {
-        "agent_outputs": outputs
+
+def coordinator_node(state: AgentState) -> dict:
+    context = {
+        "destination": state["destination"],
+        "dates": state.get("dates"),
+        "budget": state.get("budget"),
+        "preferences": state.get("preferences", []),
     }
+    response = {
+        "status": "planning_started",
+        "message": f"Planning has started for {state['destination']}. I recorded your preferences and will coordinate the travel research next.",
+        "trip_context": context,
+    }
+    return {"agent_outputs": {**state.get("agent_outputs", {}), "coordinator": response}}
 
-# Build graph
+
 workflow = StateGraph(AgentState)
 workflow.add_node("coordinator", coordinator_node)
 workflow.add_edge(START, "coordinator")
 workflow.add_edge("coordinator", END)
-
-# Compile graph
 coordinator_graph = workflow.compile()

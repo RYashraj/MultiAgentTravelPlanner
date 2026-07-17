@@ -3,206 +3,131 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Generator
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
-# pyrefly: ignore [missing-import]
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
-from app.db.models import User, Trip, Message, Itinerary
+from app.db.models import Itinerary
+from app.repositories import TripRepository, MessageRepository, ItineraryRepository, UserRepository
+from app.schemas.trips import TripCreate, TripResponse, MessageCreate, MessageResponse, ItineraryResponse, ChatResponse
 from app.agents.supervisor import SupervisorAgent
-from app.repositories import TripRepository, MessageRepository
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])
 
-# --- Pydantic Schemas ---
-class TripCreate(BaseModel):
-    destination: str
-    status: str = "draft"
 
-class TripOut(BaseModel):
-    id: uuid.UUID
-    user_id: uuid.UUID
-    destination: str
-    status: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class MessageCreate(BaseModel):
-    content: str
-
-class MessageOut(BaseModel):
-    id: uuid.UUID
-    trip_id: uuid.UUID
-    sender: str
-    content: str
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-class ItineraryOut(BaseModel):
-    id: uuid.UUID
-    trip_id: uuid.UUID
-    day_number: int
-    title: str
-    description: str | None
-    activities: dict | list | None
-    created_at: datetime
-
-    class Config:
-        from_attributes = True
-
-# --- Endpoints ---
-
-@router.post("", response_model=TripOut, status_code=status.HTTP_201_CREATED)
-def create_trip(
-    trip_in: TripCreate,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Creates a new travel itinerary (trip) for the authenticated user.
-    """
-    trip_repo = TripRepository(db)
-    trip = trip_repo.create(
-        user_id=current_user.id,
-        destination=trip_in.destination,
-        status=trip_in.status
-    )
-    logger.info(f"Created trip {trip.id} to {trip.destination} for user {current_user.email}")
+def owned_trip(trip_id: uuid.UUID, user: CurrentUser, db: Session):
+    trip = TripRepository(db).get_for_user(trip_id, user.id)
+    if trip is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Trip not found")
     return trip
 
 
-@router.get("", response_model=list[TripOut])
+@router.post("", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
+def create_trip(
+    payload: TripCreate,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    UserRepository(db).upsert(user.id, user.email, user.full_name)
+    return TripRepository(db).create(user.id, payload.destination.strip())
+
+
+@router.get("", response_model=list[TripResponse])
 def list_trips(
-    current_user: User = Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieves all trips belonging to the authenticated user.
-    """
-    trip_repo = TripRepository(db)
-    trips = trip_repo.list_by_user(current_user.id)
-    return trips
+    return TripRepository(db).list_for_user(user.id)
 
 
-@router.get("/{trip_id}/messages", response_model=list[MessageOut])
-def get_trip_messages(
+@router.get("/{trip_id}", response_model=TripResponse)
+def get_trip(
     trip_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieves the message history for a specific trip.
-    Guards access so users can only view their own trips' chats.
-    """
-    trip_repo = TripRepository(db)
-    trip = trip_repo.get_by_id(trip_id)
-    if not trip:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found"
-        )
-    if trip.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this trip's resources"
-        )
-    
-    message_repo = MessageRepository(db)
-    messages = message_repo.list_by_trip(trip_id)
-    return messages
+    return owned_trip(trip_id, user, db)
 
 
-@router.get("/{trip_id}/itineraries", response_model=list[ItineraryOut])
+@router.get("/{trip_id}/messages", response_model=list[MessageResponse])
+def list_messages(
+    trip_id: uuid.UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    owned_trip(trip_id, user, db)
+    return MessageRepository(db).list_for_trip(trip_id)
+
+
+@router.get("/{trip_id}/itineraries", response_model=list[ItineraryResponse])
 def get_trip_itineraries(
     trip_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Retrieves the generated day-by-day itineraries for a specific trip.
-    Guards access so users can only view their own trips' itineraries.
-    """
-    trip_repo = TripRepository(db)
-    trip = trip_repo.get_by_id(trip_id)
-    if not trip:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found"
-        )
-    if trip.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this trip's resources"
-        )
+    owned_trip(trip_id, user, db)
+    itinerary = db.scalar(select(Itinerary).where(Itinerary.trip_id == trip_id))
+    if not itinerary:
+        return []
     
-    itineraries = db.query(Itinerary).filter(Itinerary.trip_id == trip_id).order_by(Itinerary.day_number).all()
-    return itineraries
+    # Adapter/Facade pattern: wrap the single content field in the format expected by the frontend
+    return [
+        ItineraryResponse(
+            id=itinerary.id,
+            trip_id=itinerary.trip_id,
+            day_number=1,
+            title="Consolidated Travel Plan",
+            description=itinerary.content,
+            activities={
+                "flights": "Transit options verified",
+                "accommodation": "Stays curated",
+                "experiences": "Daily schedule structured"
+            },
+            created_at=itinerary.created_at
+        )
+    ]
 
 
 @router.post("/{trip_id}/messages")
 async def send_trip_message(
     trip_id: uuid.UUID,
-    message_in: MessageCreate,
+    payload: MessageCreate,
     stream: bool = Query(default=False),
-    current_user: User = Depends(get_current_user),
+    user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Sends a message to the trip chat workspace.
-    Saves the user message, generates a dynamic mock AI response, and either:
-    1. Returns a standard JSON list of the user & assistant messages (default).
-    2. Streams the assistant message word-by-word via Server-Sent Events (SSE).
-    """
-    # 1. Validate trip ownership
-    trip_repo = TripRepository(db)
-    trip = trip_repo.get_by_id(trip_id)
-    if not trip:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Trip not found"
-        )
-    if trip.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this trip's resources"
-        )
-
-    # 2. Save user message to database using Repository
-    message_repo = MessageRepository(db)
-    user_msg = message_repo.create(
+    trip = owned_trip(trip_id, user, db)
+    
+    # Save the user message to database using repository
+    user_msg = MessageRepository(db).create(
         trip_id=trip_id,
-        sender="user",
-        content=message_in.content
+        user_id=user.id,
+        role="user",
+        content=payload.content.strip()
     )
 
-    # 3. Invoke SupervisorAgent to orchestrate and stream planning
     agent = SupervisorAgent()
 
     if stream:
-        # SSE Generator
         async def event_generator():
             # Yield user message details first to confirm receipt
-            yield f"event: user_message\ndata: {json.dumps({'id': str(user_msg.id), 'content': user_msg.content, 'sender': 'user'})}\n\n"
+            yield f"event: user_message\ndata: {json.dumps({'id': str(user_msg.id), 'content': user_msg.content, 'role': 'user'})}\n\n"
             await asyncio.sleep(0.1)
 
-            async for step in agent.run_orchestration_stream(db, trip_id, message_in.content, current_user):
+            async for step in agent.run_orchestration_stream(db, trip_id, payload.content, user):
                 event_type = step["event"]
                 if event_type == "agent_log":
                     data = {"agent": step["agent"], "content": step["content"]}
                 elif event_type == "message_chunk":
-                    data = {"content": step["content"], "sender": step["sender"]}
+                    data = {"content": step["content"], "role": step["sender"]}
                 elif event_type == "message_complete":
-                    data = {"id": step["id"], "content": step["content"], "sender": step["sender"]}
+                    data = {"id": step["id"], "content": step["content"], "role": step["sender"]}
                 else:
                     data = step
 
@@ -211,26 +136,38 @@ async def send_trip_message(
         return StreamingResponse(event_generator(), media_type="text/event-stream")
 
     else:
+        # Synced non-streaming call
         final_assistant_msg_content = ""
         final_assistant_msg_id = None
-        async for step in agent.run_orchestration_stream(db, trip_id, message_in.content, current_user):
+        async for step in agent.run_orchestration_stream(db, trip_id, payload.content, user):
             if step["event"] == "message_complete":
                 final_assistant_msg_content = step["content"]
                 final_assistant_msg_id = uuid.UUID(step["id"])
 
-        return {
-            "user_message": {
-                "id": user_msg.id,
-                "trip_id": user_msg.trip_id,
-                "sender": user_msg.sender,
-                "content": user_msg.content,
-                "created_at": user_msg.created_at
-            },
-            "assistant_message": {
-                "id": final_assistant_msg_id or uuid.uuid4(),
-                "trip_id": trip_id,
-                "sender": "assistant",
-                "content": final_assistant_msg_content,
-                "created_at": datetime.now(timezone.utc)
-            }
-        }
+        user_msg_response = MessageResponse.model_validate(user_msg)
+        
+        # Retrieve the latest coordinator message & itinerary
+        coord_msg = db.scalar(
+            select(Itinerary).where(Itinerary.trip_id == trip_id)
+        )
+        itinerary_content = coord_msg.content if coord_msg else ""
+        
+        msg_db = MessageRepository(db).list_for_trip(trip_id)
+        assistant_msg_obj = next((m for m in reversed(msg_db) if m.role == "assistant"), None)
+        
+        if assistant_msg_obj:
+            coord_msg_response = MessageResponse.model_validate(assistant_msg_obj)
+        else:
+            coord_msg_response = MessageResponse(
+                id=final_assistant_msg_id or uuid.uuid4(),
+                role="assistant",
+                content=final_assistant_msg_content,
+                created_at=datetime.now(timezone.utc)
+            )
+
+        return ChatResponse(
+            user_message=user_msg_response,
+            coordinator_message=coord_msg_response,
+            itinerary=itinerary_content,
+            run_id=final_assistant_msg_id or uuid.uuid4()
+        )

@@ -8,12 +8,12 @@ import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Any
 
-# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 
 from app.db.models import User, Trip, Message, Itinerary, AgentRun
+from app.repositories import AgentRunRepository, ItineraryRepository, MessageRepository, TripRepository
 
 logger = logging.getLogger(__name__)
 
@@ -28,36 +28,30 @@ class SupervisorAgent:
         db: Session,
         trip_id: uuid.UUID,
         user_query: str,
-        current_user: User
+        current_user: Any
     ) -> AsyncGenerator[dict, None]:
         """
         Executes the multi-agent planning simulation step-by-step.
         Yields logs and intermediate chunks, then writes Itinerary and AgentRun to the DB.
         """
         # Retrieve the trip
-        trip = db.query(Trip).filter(Trip.id == trip_id).first()
-        destination = trip.destination if trip else "your destination"
+        trip = TripRepository(db).get_for_user(trip_id, current_user.id)
+        if not trip:
+            return
+        destination = trip.destination
 
         # Initialize Agent Run session in DB
-        agent_run = AgentRun(
-            trip_id=trip_id,
-            agent_name="SupervisorAgent",
-            status="started",
-            logs=[]
-        )
-        db.add(agent_run)
-        db.commit()
-        db.refresh(agent_run)
+        runs = AgentRunRepository(db)
+        input_payload = {"user_query": user_query}
+        agent_run = runs.start(trip_id, input_payload)
 
+        logs_list = []
         def add_run_log(agent: str, content: str):
-            current_logs = list(agent_run.logs or [])
-            current_logs.append({
+            logs_list.append({
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "agent": agent,
                 "content": content
             })
-            agent_run.logs = current_logs
-            db.commit()
 
         # Step 1: Run the Coordinator StateGraph skeleton
         from app.agents.coordinator import coordinator_graph, AgentState
@@ -66,61 +60,62 @@ class SupervisorAgent:
             destination=destination,
             dates=None,
             budget=None,
-            preferences=None,
-            agent_outputs=[],
-            messages=[]
+            preferences=[],
+            user_message=user_query,
+            agent_outputs={}
         )
         
-        # Invoke the compiled graph asynchronously
-        graph_output = await coordinator_graph.ainvoke(state_input)
-        coordinator_logs = graph_output.get("agent_outputs", [])
-        last_log = coordinator_logs[-1] if coordinator_logs else {
-            "agent": "Coordinator Agent",
-            "content": f"[Coordinator] Planning started for destination: {destination}."
-        }
+        # Invoke the compiled graph
+        graph_output = await asyncio.to_thread(coordinator_graph.invoke, state_input)
+        coordinator_output = graph_output.get("agent_outputs", {}).get("coordinator", {})
+        message_text = coordinator_output.get("message", f"Planning has started for {destination}.")
         
         yield {
             "event": "agent_log",
-            "agent": last_log["agent"],
-            "content": last_log["content"]
+            "agent": "CoordinatorAgent",
+            "content": message_text
         }
-        add_run_log(last_log["agent"], last_log["content"])
+        add_run_log("CoordinatorAgent", message_text)
         await asyncio.sleep(1.0)
 
         # Step 2: Logistics Agent fetches transport options
+        logistics_msg = f"[Logistics] Querying travel routes & flight options to {destination}. Found optimal route."
         yield {
             "event": "agent_log",
-            "agent": "Logistics Agent",
-            "content": f"[Logistics] Querying travel routes & flight options to {destination}. Found optimal route."
+            "agent": "LogisticsAgent",
+            "content": logistics_msg
         }
-        add_run_log("Logistics Agent", f"Queried flight options to {destination}.")
+        add_run_log("LogisticsAgent", logistics_msg)
         await asyncio.sleep(1.2)
 
         # Step 3: Accommodation Agent searches stays
+        acc_msg = f"[Accommodation] Searching stays in {destination} within standard budget parameters."
         yield {
             "event": "agent_log",
-            "agent": "Accommodation Agent",
-            "content": f"[Accommodation] Searching stays in {destination} within standard budget parameters."
+            "agent": "AccommodationAgent",
+            "content": acc_msg
         }
-        add_run_log("Accommodation Agent", f"Searched lodging in {destination}.")
+        add_run_log("AccommodationAgent", acc_msg)
         await asyncio.sleep(1.2)
 
         # Step 4: Experience Agent curates activities
+        exp_msg = f"[Experiences] Compiling top attractions, local sightseeing spots, and culinary experiences in {destination}."
         yield {
             "event": "agent_log",
-            "agent": "Experience Agent",
-            "content": f"[Experiences] Compiling top attractions, local sightseeing spots, and culinary experiences in {destination}."
+            "agent": "ExperienceAgent",
+            "content": exp_msg
         }
-        add_run_log("Experience Agent", f"Compiled sights/activities in {destination}.")
+        add_run_log("ExperienceAgent", exp_msg)
         await asyncio.sleep(1.2)
 
         # Step 5: Supervisor compiles final plan & saves Itinerary
+        sup_msg = "[Orchestrator] Budget constraints verified. Compiling consolidated day-by-day travel plan..."
         yield {
             "event": "agent_log",
-            "agent": "Supervisor Agent",
-            "content": "[Orchestrator] Budget constraints verified. Compiling consolidated day-by-day travel plan..."
+            "agent": "SupervisorAgent",
+            "content": sup_msg
         }
-        add_run_log("Supervisor Agent", "Constraint checks passed. Building final itinerary markdown.")
+        add_run_log("SupervisorAgent", sup_msg)
         await asyncio.sleep(0.8)
 
         # Compile detailed itinerary text
@@ -137,24 +132,17 @@ class SupervisorAgent:
             f"Enjoy your trip! Let me know if you would like to edit or book any segment."
         )
 
-        # Save Itinerary Day Record to DB
-        itinerary_db = Itinerary(
-            trip_id=trip_id,
-            day_number=1,
-            title=f"Complete Itinerary for {destination}",
-            description=itinerary_text,
-            activities={
-                "flights": "Standard Round-trip Route",
-                "hotel": "Boutique Central Stay",
-                "days": ["Day 1: Arrival & Landmarks", "Day 2: Gastronomy & Culture", "Day 3: Scenic Excursions"]
-            }
-        )
-        db.add(itinerary_db)
+        # Save Itinerary to DB using repository
+        itineraries = ItineraryRepository(db)
+        itinerary_db = itineraries.save(trip_id, itinerary_text)
 
-        # Update Agent Run status to completed
-        agent_run.status = "completed"
-        agent_run.completed_at = datetime.now(timezone.utc)
-        db.commit()
+        # Update Agent Run status to completed using repository
+        output_payload = {
+            "logs": logs_list,
+            "message": itinerary_text,
+            "coordinator_output": coordinator_output
+        }
+        runs.complete(agent_run, output_payload)
 
         # Yield actual itinerary text chunk by chunk to simulate streaming
         words = itinerary_text.split(" ")
@@ -167,15 +155,9 @@ class SupervisorAgent:
             }
             await asyncio.sleep(0.03)
 
-        # Yield complete message token
-        assistant_msg = Message(
-            trip_id=trip_id,
-            sender="assistant",
-            content=itinerary_text
-        )
-        db.add(assistant_msg)
-        db.commit()
-        db.refresh(assistant_msg)
+        # Yield complete message token using repository
+        messages = MessageRepository(db)
+        assistant_msg = messages.create(trip_id, current_user.id, "assistant", itinerary_text)
 
         yield {
             "event": "message_complete",

@@ -1,22 +1,17 @@
 from fastapi import APIRouter, Depends
-from app.api.deps import get_current_user
-from app.db.models import User
-from pydantic import BaseModel
-import uuid
+from sqlalchemy.orm import Session
+
+from app.core.security import CurrentUser, get_current_user
+from app.db.session import get_db
+from app.repositories import UserRepository
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
-class UserOut(BaseModel):
-    id: uuid.UUID
-    email: str
-    full_name: str | None
 
-    class Config:
-        from_attributes = True
-
-@router.get("/me", response_model=UserOut)
-def get_me(current_user: User = Depends(get_current_user)):
-    """
-    Returns the authenticated user details based on the verified JWT token.
-    """
-    return current_user
+@router.get("/me")
+def current_account(
+    user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Confirm the Supabase token and synchronize its account into our database."""
+    local_user = UserRepository(db).upsert(user.id, user.email, user.full_name)
+    return {"id": str(local_user.id), "email": local_user.email, "full_name": local_user.full_name}
