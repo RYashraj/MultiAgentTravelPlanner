@@ -60,6 +60,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!mounted) return;
         setSession(data.session);
         setUser(data.session?.user ?? null);
+        if (data.session) {
+          localStorage.setItem("voyager_auth_token", data.session.access_token);
+          localStorage.setItem("voyager_user_email", data.session.user?.email || "");
+        } else {
+          localStorage.removeItem("voyager_auth_token");
+          localStorage.removeItem("voyager_user_email");
+        }
         setIsLoading(false);
       });
 
@@ -68,6 +75,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!mounted) return;
           setSession(newSession);
           setUser(newSession?.user ?? null);
+          if (newSession) {
+            localStorage.setItem("voyager_auth_token", newSession.access_token);
+            localStorage.setItem("voyager_user_email", newSession.user?.email || "");
+          } else {
+            localStorage.removeItem("voyager_auth_token");
+            localStorage.removeItem("voyager_user_email");
+          }
           setIsLoading(false);
         }
       );

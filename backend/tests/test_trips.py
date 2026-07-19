@@ -84,14 +84,14 @@ def test_send_and_get_messages():
     # 2. Post a message (non-stream)
     msg_res = client.post(
         f"/api/v1/trips/{trip_id}/messages", 
-        json={"content": "Please suggest a 3-day plan"},
+        json={"content": "Please suggest a 3 day relaxation plan for June with a 2000 usd budget"},
         headers=headers
     )
     assert msg_res.status_code == 200
     body = msg_res.json()
     assert "user_message" in body
     assert "coordinator_message" in body
-    assert body["user_message"]["content"] == "Please suggest a 3-day plan"
+    assert body["user_message"]["content"] == "Please suggest a 3 day relaxation plan for June with a 2000 usd budget"
     assert "VoyagerAI" in body["coordinator_message"]["content"]
 
     # 3. Retrieve messages
@@ -111,7 +111,7 @@ def test_stream_message():
     # 2. Post a message with stream=True
     response = client.post(
         f"/api/v1/trips/{trip_id}/messages?stream=true",
-        json={"content": "Suggest historical sites"},
+        json={"content": "Suggest historical sites for a 4 day vacation this summer with 1500 usd"},
         headers=headers
     )
     assert response.status_code == 200

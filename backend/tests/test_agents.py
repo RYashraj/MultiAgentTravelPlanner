@@ -1,7 +1,7 @@
 import uuid
 import pytest
 from app.agents.supervisor import SupervisorAgent
-from app.db.models import User, Trip, Itinerary, AgentRun
+from app.db.models import User, Trip, Itinerary, AgentRun, Message
 from tests.test_trips import TestSessionLocal, headers
 
 @pytest.mark.anyio
@@ -24,12 +24,17 @@ async def test_supervisor_agent_orchestration():
         db.commit()
         db.refresh(trip)
 
+        # 2.5 Add message to history
+        msg = Message(trip_id=trip.id, user_id=user.id, role="user", content="Plan a relaxing 3 day vacation to London for next month with a $5000 budget")
+        db.add(msg)
+        db.commit()
+
         # 3. Instantiate SupervisorAgent
         agent = SupervisorAgent()
         
         # 4. Consume the orchestration stream
         steps = []
-        async for step in agent.run_orchestration_stream(db, trip.id, "Plan a trip to London", user):
+        async for step in agent.run_orchestration_stream(db, trip.id, "Plan a relaxing 3 day vacation to London for next month with a $5000 budget", user):
             steps.append(step)
 
         # 5. Verify the generated steps

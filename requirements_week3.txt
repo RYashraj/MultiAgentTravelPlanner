@@ -1,0 +1,93 @@
+================================================================================
+                VOYAGERAI — WEEK 3 MILESTONE REQUIREMENTS & SPECIFICATION
+================================================================================
+
+This document details the software and architectural requirements for Week 3
+of the VoyagerAI Multi-Agent Travel Planner project.
+
+--------------------------------------------------------------------------------
+1. OBJECTIVES & DELIVERABLES
+--------------------------------------------------------------------------------
+* Real User Accounts: End-to-end authentication, session handling, and JWT
+  validation using Supabase.
+* Persistence: A secure data layer where user records, trip details, chat
+  messages, compiled itineraries, and agent execution runs are persisted.
+* Coordinator Agent: A real LangGraph StateGraph skeleton that acts as the entry
+  point for travel planning, defining the shared state contracts.
+* Chat Shell UI: An interactive web dashboard allowing users to log in, create a
+  trip, chat with agents in real-time, view agent console log streams (SSE),
+  and inspect generated day-by-day itineraries.
+
+--------------------------------------------------------------------------------
+2. FOLDER STRUCTURE REQUIREMENTS
+--------------------------------------------------------------------------------
+The project codebase must contain the following folders and key endpoints:
+* Backend:
+  - app/api/v1/auth.py: Auth me sync endpoint.
+  - app/api/v1/trips.py: Trips & messages endpoints.
+  - app/repositories/: Database access layers using repository pattern.
+* Frontend:
+  - frontend/app/(auth)/: Login and signup routing views.
+  - frontend/app/chat/: Dedicated chat workspace routing directory (or alias).
+
+--------------------------------------------------------------------------------
+3. DETAILED TECHNICAL REQUIREMENTS
+--------------------------------------------------------------------------------
+* TASK A: FastAPI Supabase Auth Integration
+  - Middleware: Write a Starlette custom HTTP middleware (SupabaseJWTMiddleware)
+    protecting paths matching "/api/v1/trips" and "/api/v1/auth/me".
+  - Token Verification: Support standard RS256/ES256 Supabase JWT tokens via JWKS
+    client with caching. Fall back to HS256 for local testing.
+  - Mock Mode: Implement mock token verification ("mock-user-<email>") to allow
+    instant login and developer productivity without active Supabase keys.
+  - API Routes:
+    - POST /api/v1/trips: Create a trip draft.
+    - GET /api/v1/trips/{id}/messages: Retrieve trip conversation history.
+    - POST /api/v1/trips/{id}/messages: Post new message (with streaming support).
+
+* TASK B: Frontend UI & Auth Flow
+  - Components:
+    - Login: Simple email/password page. Instantly signs in mock users if keys are
+      missing in .env.local.
+    - Signup: Simple registration page mimicking instant login in mock mode.
+    - Dashboard: Lists user's planned trips with direct navigation links.
+    - Trip Workspace: Contains the Chat Workspace, live Agent Console log feed,
+      and sidebar displaying compiled day-by-day itineraries.
+
+* TASK C: Coordinator Agent & LangGraph
+  - Graph Definition: Implement a StateGraph using LangGraph.
+  - Node & Edge: Add one active coordinator node that echoes back a structured
+    "planning_started" dictionary, connected from START and routing to END.
+  - Shared State Schema: Define a TypedDict state contract capturing:
+    - destination (str)
+    - dates (str | None)
+    - budget (str | None)
+    - preferences (list[str])
+    - user_message (str)
+    - agent_outputs (dict[str, dict])
+
+* TASK D: Database Layer, Repositories & Caching
+  - Data Models: Create SQLAlchemy tables for User, Trip, Message, Itinerary,
+    and AgentRun.
+  - Migrations: Version-control schemas using Alembic upgrade/downgrade scripts.
+  - Repository Pattern: Decouple database queries into clean class wrappers for
+    all major database entities.
+  - Redis Session Caching: Implement a best-effort Redis session cache to store
+    user identity lookup states (non-blocking if Redis is unreachable).
+  - SQLite connect_args: Ensure thread safety for concurrent connections in local
+    SQLite configurations by setting check_same_thread=False.
+
+--------------------------------------------------------------------------------
+4. TESTING & VERIFICATION REQUIREMENTS
+--------------------------------------------------------------------------------
+* Backend Unit Tests: Write unit tests using pytest and TestClient covering:
+  - JWT middleware protection & CORS preflight bypass.
+  - JWT signing algorithms (ES256 JWKS client monkeypatched, HS256).
+  - Repository CRUD functions.
+  - Trip creation & chat persistence.
+  - SSE streaming messages and non-stream fallback routes.
+  - Coordinator Agent StateGraph transitions.
+* Coverage: Achieve >50% database/logic test coverage on backend.
+* Frontend Compiles: Ensure Next.js builds successfully without ESLint or TypeScript
+  errors.
+================================================================================

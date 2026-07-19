@@ -1,13 +1,95 @@
 "use client";
 
-import { useEffect, useState, useRef, FormEvent } from "react";
+import { useEffect, useState, useRef, FormEvent, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getSessionToken, signOut } from "@/lib/supabase";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
-import { LogOut, Send, Terminal, Calendar, Loader, Compass, ChevronLeft, CheckCircle } from "lucide-react";
+import { LogOut, Send, Terminal, Calendar, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles } from "lucide-react";
+
+// Helper function to parse basic Markdown (headers, lists, bold, inline code)
+function renderMarkdown(content: string) {
+  if (!content) return null;
+  const lines = content.split("\n");
+  
+  return (
+    <div className="space-y-2 font-sans">
+      {lines.map((line, idx) => {
+        // Headers
+        if (line.startsWith("### ")) {
+          return (
+            <h3 key={idx} className="text-xs font-bold uppercase tracking-wider text-indigo-400 mt-4 mb-2 flex items-center gap-1.5">
+              {line.substring(4)}
+            </h3>
+          );
+        }
+        if (line.startsWith("## ")) {
+          return (
+            <h2 key={idx} className="text-sm font-bold text-white mt-5 mb-2 border-b border-slate-800/80 pb-1">
+              {line.substring(3)}
+            </h2>
+          );
+        }
+        if (line.startsWith("# ")) {
+          return (
+            <h1 key={idx} className="text-base font-extrabold text-white mt-6 mb-3">
+              {line.substring(2)}
+            </h1>
+          );
+        }
+        
+        // Unordered lists
+        if (line.startsWith("- ") || line.startsWith("* ")) {
+          const listText = line.substring(2);
+          return (
+            <div key={idx} className="flex items-start gap-2 ml-2 my-1">
+              <span className="text-indigo-400 mt-1 select-none font-sans text-xs">•</span>
+              <p className="text-xs text-slate-300 leading-relaxed flex-1">
+                {parseInlineStyle(listText)}
+              </p>
+            </div>
+          );
+        }
+        
+        // Blank lines
+        if (line.trim() === "") {
+          return <div key={idx} className="h-1.5" />;
+        }
+        
+        // Regular paragraphs
+        return (
+          <p key={idx} className="text-xs text-slate-305 leading-relaxed">
+            {parseInlineStyle(line)}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+// Helper to parse **bold** and `code` styles inline
+function parseInlineStyle(text: string) {
+  const parts = text.split(/(\*\*.*?\*\*|`.*?`)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return (
+        <strong key={i} className="text-white font-semibold">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith("`") && part.endsWith("`")) {
+      return (
+        <code key={i} className="bg-slate-950 px-1.5 py-0.5 rounded font-mono text-[10px] text-indigo-300 border border-slate-800">
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return part;
+  });
+}
 
 type Message = {
   id: string;
@@ -48,11 +130,22 @@ function ChatPageContent() {
   const [isSending, setIsSending] = useState(false);
   const [activeLogs, setActiveLogs] = useState<string[]>([]);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
 
-  // Tabs for Workspace detail panel
-  const [activeTab, setActiveTab] = useState<"chat" | "console">("chat");
 
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
+
+  const fetchItineraries = useCallback(async () => {
+    try {
+      setItinerariesLoading(true);
+      const data = await apiFetch<Itinerary[]>(`/trips/${tripId}/itineraries`);
+      setItineraries(data);
+    } catch (err) {
+      console.error("Failed to load itineraries:", err);
+    } finally {
+      setItinerariesLoading(false);
+    }
+  }, [tripId]);
 
   // 1. Fetch Trip details and Messages History
   useEffect(() => {
@@ -87,24 +180,12 @@ function ChatPageContent() {
     return () => {
       cancelled = true;
     };
-  }, [tripId]);
+  }, [tripId, fetchItineraries]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
     scrollAnchorRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
-
-  const fetchItineraries = async () => {
-    try {
-      setItinerariesLoading(true);
-      const data = await apiFetch<Itinerary[]>(`/trips/${tripId}/itineraries`);
-      setItineraries(data);
-    } catch (err) {
-      console.error("Failed to load itineraries:", err);
-    } finally {
-      setItinerariesLoading(false);
-    }
-  };
 
   const handleSend = async (e: FormEvent) => {
     e.preventDefault();
@@ -115,6 +196,7 @@ function ChatPageContent() {
     setIsSending(true);
     setSendError(null);
     setActiveLogs([]);
+    setActiveAgent("CoordinatorAgent");
 
     // Optimistically add user bubble
     const tempUserMsg: Message = {
@@ -162,8 +244,7 @@ function ChatPageContent() {
         },
       ]);
 
-      // Focus console log tab automatically on message send
-      setActiveTab("console");
+      // Removed auto-focus to console tab to keep user in chat view
 
       while (true) {
         const { value, done } = await reader.read();
@@ -199,6 +280,7 @@ function ChatPageContent() {
               } else if (eventType === "agent_log") {
                 // Record sub-agent logs
                 setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
+                setActiveAgent(data.agent);
               } else if (eventType === "message_chunk") {
                 // Append chunk
                 tempAssistantContent += data.content;
@@ -220,8 +302,7 @@ function ChatPageContent() {
                 );
                 // Refresh itineraries
                 fetchItineraries();
-                // Switch back to chat bubble view
-                setActiveTab("chat");
+                setActiveAgent(null);
               }
             } catch (pErr) {
               console.error("Failed to parse SSE payload", pErr);
@@ -238,11 +319,31 @@ function ChatPageContent() {
     }
   };
 
+  const getStepStatus = (stepAgent: string) => {
+    if (!isSending) {
+      return activeLogs.length > 0 ? "completed" : "idle";
+    }
+    const agentOrder = ["CoordinatorAgent", "LogisticsAgent", "AccommodationAgent", "ExperienceAgent", "SupervisorAgent"];
+    const currentIndex = agentOrder.indexOf(activeAgent || "");
+    const stepIndex = agentOrder.indexOf(stepAgent);
+    if (stepIndex < currentIndex) return "completed";
+    if (stepIndex === currentIndex) return "active";
+    return "idle";
+  };
+
+  const steps = [
+    { name: "Coordinator", key: "CoordinatorAgent", icon: Terminal },
+    { name: "Logistics", key: "LogisticsAgent", icon: Plane },
+    { name: "Lodging", key: "AccommodationAgent", icon: Home },
+    { name: "Experiences", key: "ExperienceAgent", icon: Activity },
+    { name: "Supervisor", key: "SupervisorAgent", icon: Cpu }
+  ];
+
   return (
-    <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans flex flex-col">
+    <main className="h-screen overflow-hidden bg-[#0b0f19] text-slate-100 font-sans flex flex-col">
       <Navbar />
 
-      <div className="max-w-7xl w-full mx-auto px-6 py-6 flex-1 flex flex-col space-y-4">
+      <div className="max-w-7xl w-full mx-auto px-6 py-6 flex-1 flex flex-col space-y-4 overflow-hidden">
         
         {/* Navigation / Header */}
         <div className="flex items-center justify-between">
@@ -268,44 +369,62 @@ function ChatPageContent() {
           </div>
         ) : (
           /* Main Workspace Split Layout */
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
             
             {/* Left & Middle Column: Interactive Workspace */}
-            <div className="lg:col-span-2 flex flex-col border border-slate-800/80 bg-slate-900/40 rounded-3xl overflow-hidden backdrop-blur-sm relative">
+            <div className="lg:col-span-2 flex flex-col min-h-0 border border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] overflow-hidden backdrop-blur-xl shadow-2xl shadow-indigo-900/20 relative group">
+              <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               
-              {/* Tab Selector */}
-              <div className="flex border-b border-slate-850 px-4 bg-slate-950/20 items-center justify-between shrink-0 select-none">
-                <div className="flex gap-2 py-2">
-                  <button
-                    onClick={() => setActiveTab("chat")}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all ${
-                      activeTab === "chat"
-                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    Chat Workspace
-                  </button>
-                  <button
-                    onClick={() => setActiveTab("console")}
-                    className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 ${
-                      activeTab === "console"
-                        ? "bg-indigo-500/10 text-indigo-400 border border-indigo-500/20"
-                        : "text-slate-400 hover:text-slate-200"
-                    }`}
-                  >
-                    <Terminal className="w-3.5 h-3.5" /> Agent Console
-                    {isSending && (
-                      <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping" />
-                    )}
-                  </button>
+              {/* Pipeline Stepper (Always Visible at Top) */}
+              <div className="bg-slate-950/40 border-b border-slate-700/50 p-4 shrink-0 select-none">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                    Live Agent Orchestration Pipeline
+                  </h4>
+                  {isSending && (
+                    <span className="flex items-center gap-1.5 text-[10px] text-indigo-400 font-semibold animate-pulse">
+                      <Loader className="w-3 h-3 animate-spin" /> Agents Processing...
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-5 gap-2 relative">
+                  {steps.map((step, idx) => {
+                    const status = getStepStatus(step.key);
+                    const Icon = step.icon;
+                    
+                    return (
+                      <div key={step.key} className="flex flex-col items-center text-center relative group">
+                        {idx < steps.length - 1 && (
+                          <div className={`absolute top-3 left-[60%] right-[-40%] h-[1.5px] z-0 transition-colors duration-500 ${
+                            status === "completed" ? "bg-emerald-500/50" : "bg-slate-800"
+                          }`} />
+                        )}
+                        
+                        <div className={`w-6 h-6 rounded-lg flex items-center justify-center z-10 transition-all duration-500 border ${
+                          status === "completed"
+                            ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-950/20"
+                            : status === "active"
+                            ? "bg-indigo-500/10 border-indigo-500 text-indigo-400 animate-pulse shadow-lg shadow-indigo-500/20 scale-105"
+                            : "bg-slate-900/60 border-slate-850 text-slate-500"
+                        }`}>
+                          <Icon className="w-3 h-3" />
+                        </div>
+                        
+                        <span className={`text-[8px] font-bold mt-1.5 transition-colors duration-300 font-sans ${
+                          status === "completed" ? "text-emerald-400" : status === "active" ? "text-indigo-400" : "text-slate-500"
+                        }`}>
+                          {step.name}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
               {/* Workspace Content Panels */}
-              <div className="flex-1 overflow-y-auto p-6 min-h-[350px]">
-                {activeTab === "chat" ? (
-                  /* Chat Bubbles View */
+              <div className="flex-1 overflow-y-auto p-6 min-h-0">
+                  {/* Chat Bubbles View */}
                   <div className="space-y-4">
                     {isLoadingHistory ? (
                       <div className="space-y-3">
@@ -330,53 +449,32 @@ function ChatPageContent() {
                           }`}
                         >
                           <div
-                            className={`max-w-[80%] rounded-2xl px-5 py-3 text-sm leading-relaxed ${
+                            className={`max-w-[85%] rounded-2xl px-6 py-4 text-[13px] leading-relaxed relative ${
                               message.sender === "user"
-                                ? "bg-gradient-to-r from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-950/20"
-                                : "bg-slate-900/80 border border-slate-800/70 text-slate-200"
+                                ? "bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700 text-white shadow-xl shadow-indigo-500/25 border border-indigo-400/20"
+                                : "bg-slate-800/60 backdrop-blur-md border border-slate-700/50 text-slate-100 shadow-lg shadow-black/20"
                             }`}
                           >
-                            {message.content}
+                            {message.sender === "assistant" && (
+                               <div className="absolute -left-2 top-4 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                            )}
+                            {message.sender === "user" ? (
+                              message.content
+                            ) : (
+                              renderMarkdown(message.content)
+                            )}
                           </div>
                         </div>
                       ))
                     )}
                     <div ref={scrollAnchorRef} />
                   </div>
-                ) : (
-                  /* Agent Console Log Terminal */
-                  <div className="font-mono text-xs space-y-3">
-                    <div className="flex items-center justify-between border-b border-slate-850 pb-2 mb-3 text-slate-500 select-none">
-                      <span>agent_trace_logs.sh</span>
-                      {isSending && (
-                        <span className="flex items-center gap-1.5 text-indigo-400 font-semibold animate-pulse">
-                          <Loader className="w-3.5 h-3.5 animate-spin" /> Stream Active
-                        </span>
-                      )}
-                    </div>
-                    
-                    {activeLogs.length === 0 ? (
-                      <div className="text-slate-600 italic">No console logs recorded in this session yet. Send a message to start orchestration.</div>
-                    ) : (
-                      <div className="space-y-2">
-                        {activeLogs.map((log, idx) => (
-                          <div key={idx} className="flex gap-2">
-                            <span className="text-slate-600 select-none">&gt;</span>
-                            <span className={log.includes("✔") || log.includes("success") ? "text-emerald-400" : "text-slate-300"}>
-                              {log}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
 
               {/* Form Input Area */}
               <form
                 onSubmit={handleSend}
-                className="border-t border-slate-850 p-4 bg-slate-950/10 flex items-end gap-3 shrink-0"
+                className="border-t border-slate-700/50 p-5 bg-slate-900/80 backdrop-blur-xl flex items-end gap-3 shrink-0 relative z-10"
               >
                 <textarea
                   value={inputMessage}
@@ -389,14 +487,14 @@ function ChatPageContent() {
                   }}
                   placeholder="Tell your planning agents about your trip details..."
                   rows={1}
-                  className="flex-1 resize-none bg-slate-950/80 border border-slate-850 rounded-2xl px-4 py-3 text-sm text-slate-100 placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/60 focus:border-indigo-500/60 transition-all max-h-32 font-sans"
+                  className="flex-1 resize-none bg-slate-950/50 border border-slate-700/60 rounded-[1.25rem] px-5 py-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500/70 transition-all duration-300 max-h-32 font-sans shadow-inner shadow-black/40"
                 />
                 <button
                   type="submit"
                   disabled={!inputMessage.trim() || isSending}
-                  className="w-11 h-11 shrink-0 flex items-center justify-center bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 disabled:from-slate-850 disabled:to-slate-850 disabled:cursor-not-allowed rounded-2xl shadow-lg shadow-indigo-500/20 transition-all"
+                  className="w-12 h-12 shrink-0 flex items-center justify-center bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-600 hover:from-indigo-400 hover:to-purple-500 disabled:from-slate-800 disabled:to-slate-800 disabled:cursor-not-allowed rounded-[1.25rem] shadow-lg hover:shadow-indigo-500/40 hover:scale-105 active:scale-95 transition-all duration-300 group"
                 >
-                  <Send className="w-4 h-4 text-white" />
+                  <Send className="w-5 h-5 text-white group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </button>
               </form>
               {sendError && (
@@ -405,10 +503,12 @@ function ChatPageContent() {
             </div>
 
             {/* Right Column: Compiled Itineraries Display */}
-            <aside className="border border-slate-800/80 bg-slate-900/40 rounded-3xl p-6 flex flex-col space-y-4 backdrop-blur-sm">
-              <div className="flex items-center gap-2.5 text-xs font-bold text-slate-400 uppercase tracking-widest border-b border-slate-850 pb-3 select-none shrink-0">
-                <Calendar className="w-4 h-4 text-indigo-400" />
-                <span>Generated Itineraries</span>
+            <aside className="border min-h-0 border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] p-6 flex flex-col space-y-5 backdrop-blur-xl shadow-2xl shadow-purple-900/10">
+              <div className="flex items-center gap-3 text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-4 select-none shrink-0">
+                <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+                  <Calendar className="w-4 h-4 text-indigo-400" />
+                </div>
+                <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Generated Itineraries</span>
               </div>
 
               <div className="flex-1 overflow-y-auto space-y-4 pr-1">
@@ -422,14 +522,14 @@ function ChatPageContent() {
                   </div>
                 ) : (
                   itineraries.map((it) => (
-                    <div key={it.id} className="bg-slate-950/40 border border-slate-850/80 rounded-2xl p-5 space-y-3 text-xs animate-fade-in">
-                      <div className="flex justify-between items-center text-slate-100 font-semibold border-b border-slate-850/50 pb-2">
-                        <span className="text-indigo-400">Day {it.day_number}</span>
-                        <span className="text-[10px] text-slate-500">{it.title}</span>
+                    <div key={it.id} className="bg-slate-800/40 border border-slate-700/50 hover:border-indigo-500/30 rounded-2xl p-5 space-y-3 text-xs transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-default">
+                      <div className="flex justify-between items-center text-slate-100 font-semibold border-b border-slate-700/50 pb-3">
+                        <span className="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-md border border-indigo-500/20">Day {it.day_number}</span>
+                        <span className="text-[11px] text-slate-300 font-medium group-hover:text-indigo-300 transition-colors">{it.title}</span>
                       </div>
-                      <p className="text-slate-400 leading-relaxed font-sans whitespace-pre-line text-[11px]">
-                        {it.description}
-                      </p>
+                      <div className="text-slate-300 leading-relaxed font-sans text-[12px] group-hover:text-slate-200 transition-colors">
+                        {renderMarkdown(it.description)}
+                      </div>
                       
                       {it.activities && typeof it.activities === "object" && (
                         <div className="flex flex-wrap gap-1.5 pt-2">

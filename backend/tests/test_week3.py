@@ -56,7 +56,7 @@ def test_trip_chat_is_persisted_and_reloaded(client, auth_headers):
     chat_response = client.post(
         f"/api/v1/trips/{trip['id']}/messages",
         headers=auth_headers,
-        json={"content": "I enjoy food and museums", "budget": "₹100000", "preferences": ["food", "culture"]},
+        json={"content": "I enjoy food and museums for a 5 day vacation this summer with a 100000 inr budget", "budget": "₹100000", "preferences": ["food", "culture"]},
     )
     assert chat_response.status_code == 200
     coord_msg_content = chat_response.json()["coordinator_message"]["content"]
