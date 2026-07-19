@@ -114,12 +114,16 @@ voyagerai/
 │   └── lib/              # api and supabase wrappers
 ```
 
-## 📝 Week 3 Submission Checklist
-- [x] Repository pattern database layer (Users, Trips, Messages, Itineraries, AgentRuns)
-- [x] Redis caching configuration for decoded user sessions
-- [x] JWT token verification using ES256/RS256 JWKS fetch and legacy HS256 fallbacks
-- [x] Coordinator Agent LangGraph StateGraph skeleton compiled and wired
-- [x] Next.js frontend split into structured landing, auth, dashboard, and chat layout pages
-- [x] Real-time chat workspace with stream processing and logs console UI
-- [x] 100% passing automated test suite (13/13 backend tests)
-- [x] Next.js compilation (static check & type check) runs error-free
+## 📝 Week 3 Completed Checklist
+- [x] **Auth & Database:** Real user accounts working end-to-end via Supabase Auth + FastAPI JWT middleware.
+- [x] **Repository Pattern:** Users, Trips, Messages, Itineraries, AgentRuns mapped and tested.
+- [x] **Dockerized Stack:** Backend, Frontend, Postgres, and Redis running seamlessly.
+- [x] **LangGraph Skeleton:** Coordinator Agent running as a real LangGraph StateGraph.
+- [x] **Streaming Chat UI:** Next.js UI talks to the backend, handles SSE streaming, and persists messages to DB.
+- [x] **100% Tests Passing:** Automated test suite fully functional.
+
+## 🔮 Week 4: Real Multi-Agent Intelligence (Next Up)
+- **Real Tool Calling:** Implement `weather_tool.py` (OpenWeather) and `places_tool.py` (Google Places).
+- **LangGraph Orchestration:** Build out the `Planner Agent` to dynamically call Weather + Attraction agents based on constraints.
+- **Memory/RAG:** Integrate ChromaDB so past trip messages are embedded and retrieved for context.
+- **Goal:** Replace our current "static/stub" responses with a real, dynamic, and constraint-aware itinerary generated live.
