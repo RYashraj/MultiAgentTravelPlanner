@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     database_connect_timeout_seconds: int = 5
     redis_url: str = "redis://localhost:6379/0"
     redis_session_ttl_seconds: int = 3600
+    chroma_persist_dir: str = "./chroma_data"
 
     supabase_url: str = ""
     supabase_anon_key: str = ""

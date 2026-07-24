@@ -3,24 +3,9 @@
 The graph deliberately has one node. Week 4 will add Logistics,
 Accommodation, and Experience nodes to the same shared state contract.
 """
-import logging
-from typing import TypedDict
+from langgraph.graph import END, START, StateGraph
 
-# Attempt to load native StateGraph, fallback to compat layer if imports fail due to DLL policies
-try:
-    from langgraph.graph import StateGraph, START, END
-except (ImportError, Exception):
-    from app.agents.langgraph_compat import StateGraph, START, END
-
-logger = logging.getLogger(__name__)
-
-class AgentState(TypedDict):
-    destination: str
-    dates: str | None
-    budget: str | None
-    preferences: list[str]
-    user_message: str
-    agent_outputs: dict[str, dict]
+from app.agents.state import AgentState
 
 
 def coordinator_node(state: AgentState) -> dict:
