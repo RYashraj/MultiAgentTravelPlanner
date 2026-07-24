@@ -3,7 +3,7 @@ import logging
 from typing import Any
 
 from app.agents.state import AgentState
-from app.tools.places_tool import search_attractions
+from app.tools.places_tool import search_places
 
 logger = logging.getLogger(__name__)
 
@@ -14,7 +14,11 @@ def attraction_node(state: AgentState) -> dict[str, Any]:
     preferences = state.get("preferences", [])
 
     try:
-        raw_items = search_attractions(destination, preferences)
+        # Our mock tool takes location and query_type
+        # We pass preferences as a string just so it doesn't break, but mock uses query_type="attraction"
+        raw_items_str = search_places(destination, "attraction")
+        import json
+        raw_items = json.loads(raw_items_str)
         items: list[dict[str, Any]] = []
         for raw in raw_items:
             category = str(raw.get("category", "General"))

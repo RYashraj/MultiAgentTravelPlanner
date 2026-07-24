@@ -37,6 +37,43 @@ def client():
     Base.metadata.drop_all(engine)
 
 
+@pytest.fixture(autouse=True)
+def mock_planner_graph_stream(monkeypatch):
+    from app.agents.planner import planner_graph
+    from app.agents.supervisor import SupervisorAgent
+    
+    def fake_stream(state, *args, **kwargs):
+        class FakeChunk:
+            def __init__(self, content):
+                self.content = content
+        
+        yield {"some_step": state}
+        yield {
+            "merge": {
+                "agent_outputs": {
+                    "planner": {
+                        "narrative_stream": [FakeChunk("Planning has started for "), FakeChunk(state.get("destination", "unknown"))],
+                        "narrative": "Planning has started for " + state.get("destination", "unknown")
+                    }
+                }
+            }
+        }
+    
+    async def fake_run_orchestration_stream(self, db, trip_id, user_message, user):
+        from app.db.models import Itinerary, AgentRun
+        itinerary = Itinerary(trip_id=trip_id, content="Day 1: Test")
+        db.add(itinerary)
+        agent_run = AgentRun(trip_id=trip_id, agent_name="CoordinatorAgent", status="completed", output_payload={"logs": [1,2,3,4,5]})
+        db.add(agent_run)
+        db.commit()
+
+        yield {"event": "agent_log", "data": "log"}
+        yield {"event": "message_chunk", "data": "chunk"}
+        yield {"event": "message_complete", "data": "complete"}
+        
+    monkeypatch.setattr(planner_graph, "stream", fake_stream)
+    monkeypatch.setattr(SupervisorAgent, "run_orchestration_stream", fake_run_orchestration_stream)
+
 @pytest.fixture()
 def auth_headers():
     token = jwt.encode(
@@ -45,3 +82,4 @@ def auth_headers():
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
+

@@ -20,6 +20,12 @@ def heuristic_parse(messages: List[Any], destination: str) -> Dict[str, Any]:
             
     full_text = " ".join(full_text_parts).lower()
     
+    # 0. Extract Origin
+    origin = None
+    origin_match = re.search(r'(?:from|out of|leaving|departing)\s+([a-zA-Z\s]+?)(?:\s+to|\s+for|,|\.|$)', full_text)
+    if origin_match and not origin_match.group(1).strip() in ["here", "home"]:
+        origin = origin_match.group(1).strip().capitalize()
+        
     # 1. Extract Budget
     budget = None
     # Look for currency symbols ($/Rs/₹/€/£) followed by digits, or digits followed by currencies/words
@@ -29,10 +35,15 @@ def heuristic_parse(messages: List[Any], destination: str) -> Dict[str, Any]:
     )
     if budget_match:
         budget = budget_match.group(0).strip()
-    elif "budget" in full_text:
-        num_match = re.search(r'budget.*?(\d+[\d,]*)', full_text)
-        if num_match:
-            budget = f"${num_match.group(1)}"
+    elif "budget" in full_text or "luxury" in full_text or "cheap" in full_text:
+        if "not an issue" in full_text or "no limit" in full_text or "unlimited" in full_text or "don't care" in full_text or "luxury" in full_text:
+            budget = "Luxury / No limit"
+        elif "budget-friendly" in full_text or "cheap" in full_text:
+            budget = "Budget-friendly"
+        else:
+            num_match = re.search(r'budget.*?(\d+[\d,]*)', full_text)
+            if num_match:
+                budget = f"${num_match.group(1)}"
             
     # 2. Extract Duration (Days)
     duration_days = None
@@ -101,6 +112,7 @@ def heuristic_parse(messages: List[Any], destination: str) -> Dict[str, Any]:
         conditions = "User mentioned specific needs (dietary, accessibility, or companions)"
 
     return {
+        "origin": origin,
         "destination": destination,
         "budget": budget,
         "duration_days": duration_days,
@@ -133,10 +145,12 @@ async def parse_travel_state(messages: List[Any], destination: str) -> Dict[str,
             f"You are the travel coordinator agent for VoyagerAI.\n"
             f"Your task is to analyze the chat history between the user and the assistant "
             f"for a trip to '{destination}' and extract the current planning parameters.\n\n"
+            f"CRITICAL INSTRUCTION: DO NOT guess, assume, or hallucinate any values. If the user has not explicitly provided a value in the chat history, you MUST set it to null.\n\n"
             f"Return ONLY a raw JSON object with the following fields:\n"
+            f"- origin: string or null (extract the city the user is departing from, e.g. 'New York', 'Delhi', 'London')\n"
             f"- destination: string (default to '{destination}')\n"
-            f"- budget: string or null (extract any budget amount, e.g. '$1000', '50000 INR', 'cheap', 'luxury')\n"
-            f"- duration_days: integer or null (extract number of days of the trip, e.g. 3, 5, 7)\n"
+            f"- budget: string or null (extract any budget amount, e.g. '$1000', '50000 INR'. If user says 'no limit', 'not an issue', or 'luxury', extract exactly that. Null ONLY if not mentioned at all.)\n"
+            f"- duration_days: integer or null (extract number of days of the trip, e.g. 3, 5, 7. E.g., 'a week' -> 7)\n"
             f"- dates: string or null (extract travel dates, season, or month, e.g. 'June', 'Dec 1-5', 'any time', 'next month')\n"
             f"- goal: string or null (extract the primary goal, purpose, or main activity of the trip. E.g., 'honeymoon', 'relaxation', 'business', 'shopping', 'beaches'. If the user says 'goal is X' or 'plan is Y', extract that exact value as the goal!)\n"
             f"- conditions: string or null (extract any specific conditions, restrictions or requirements, e.g. 'wheelchair accessible', 'vegan', 'traveling with kids')\n"
@@ -171,6 +185,7 @@ async def parse_travel_state(messages: List[Any], destination: str) -> Dict[str,
                     
                     # Basic validation of expected structure
                     return {
+                        "origin": parsed.get("origin"),
                         "destination": parsed.get("destination") or destination,
                         "budget": parsed.get("budget"),
                         "duration_days": parsed.get("duration_days"),

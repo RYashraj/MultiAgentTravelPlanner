@@ -14,7 +14,9 @@ def weather_node(state: AgentState) -> dict[str, Any]:
     dates = state.get("dates")
 
     try:
-        data = get_weather(destination, dates)
+        import json
+        data_str = get_weather(destination)
+        data = json.loads(data_str)
         forecast = data.get("forecast", data) if isinstance(data, dict) else data
         condition = data.get("condition", "") if isinstance(data, dict) else ""
         temperature = data.get("temperature", "") if isinstance(data, dict) else ""
@@ -31,10 +33,13 @@ def weather_node(state: AgentState) -> dict[str, Any]:
             if "heavy rain" not in warnings:
                 warnings.append("heavy rain")
 
+        is_estimate = data.get("is_estimate", False) if isinstance(data, dict) else False
+        
         weather_output = {
             "forecast": forecast,
             "summary": summary,
             "warnings": warnings,
+            "is_estimate": is_estimate,
         }
     except Exception as exc:
         logger.error("Error running weather tool for destination '%s': %s", destination, exc, exc_info=True)

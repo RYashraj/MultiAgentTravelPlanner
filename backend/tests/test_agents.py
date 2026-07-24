@@ -53,7 +53,8 @@ async def test_supervisor_agent_orchestration():
         assert agent_run is not None
         assert agent_run.agent_name == "CoordinatorAgent" # It is CoordinatorAgent in AgentRunRepository.start
         assert agent_run.status == "completed"
-        assert len(agent_run.output_payload.get("logs", [])) == 5
+        output_payload = agent_run.output_payload or {}
+        assert len(output_payload.get("logs", [])) == 5
 
     finally:
         db.close()

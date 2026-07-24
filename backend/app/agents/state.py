@@ -12,6 +12,7 @@ def merge_agent_outputs(left: dict[str, dict] | None, right: dict[str, dict] | N
 
 class AgentState(TypedDict):
     trip_id: str
+    origin: str | None
     destination: str
     dates: str | None
     budget: str | None

@@ -4,20 +4,24 @@ Manages the travel planning pipeline, orchestrates sub-agents,
 and records session metrics to the database.
 """
 import asyncio
-import json
 import logging
 import uuid
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Any
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.models import User, Trip, Message, Itinerary, AgentRun
+from app.db.session import get_db
 from app.repositories import AgentRunRepository, ItineraryRepository, MessageRepository, TripRepository
+from app.agents.parser import parse_travel_state
+from app.core.config import get_settings
+import httpx
+import json
 
 logger = logging.getLogger(__name__)
 
-from app.agents.parser import parse_travel_state
 
 class SupervisorAgent:
     """
@@ -30,10 +34,10 @@ class SupervisorAgent:
         db: Session,
         trip_id: uuid.UUID,
         user_query: str,
-        current_user: Any
+        current_user: Any,
     ) -> AsyncGenerator[dict, None]:
         """
-        Executes the multi-agent planning simulation step-by-step.
+        Executes the multi-agent planning step-by-step.
         Yields logs and intermediate chunks, then writes Itinerary/clarifying messages and AgentRun to the DB.
         """
         # Retrieve the trip
@@ -44,244 +48,211 @@ class SupervisorAgent:
 
         # Initialize Agent Run session in DB
         runs = AgentRunRepository(db)
-        input_payload = {"user_query": user_query}
-        agent_run = runs.start(trip_id, input_payload)
+        agent_run = runs.start(trip_id, {"user_query": user_query})
 
-        logs_list = []
-        def add_run_log(agent: str, content: str):
+        logs_list: list[dict] = []
+
+        def add_run_log(agent: str, content: str) -> None:
             logs_list.append({
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "agent": agent,
-                "content": content
+                "content": content,
             })
 
         # Load message history
         messages_repo = MessageRepository(db)
         history = messages_repo.list_for_trip(trip_id)
 
-        # Check if itinerary already exists to prevent endless regeneration loop
-        from sqlalchemy import select
-        from app.db.models import Itinerary
+        # Check if itinerary already exists to prevent re-generation loop
         existing_itinerary = db.scalar(select(Itinerary).where(Itinerary.trip_id == trip_id))
-        
+
         if existing_itinerary:
-            reply_msg = "Your itinerary is already generated and finalized! We are holding work here for now. Next week, conversational AI features will be added so we can chat further! If you want a new plan right now, please create a new trip."
-            
+            settings = get_settings()
+            if settings.gemini_api_key:
+                # Use AI for post-itinerary conversation
+                history_text = "\n".join([f"{msg.role}: {msg.content}" for msg in history[-5:]])
+                prompt = (
+                    f"You are the VoyagerAI travel assistant. An itinerary for {destination} has already been generated.\n\n"
+                    f"Current Itinerary Plan:\n{existing_itinerary.content}\n\n"
+                    f"Recent Chat History:\n{history_text}\n\n"
+                    f"User's latest message: {user_query}\n\n"
+                    f"Respond helpfully and conversationally as an AI agent. If they ask for hotels, flights, or modifications, suggest options or explain how the itinerary could be adjusted. Use markdown for formatting."
+                )
+                
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+                payload = {
+                    "contents": [{"parts": [{"text": prompt}]}]
+                }
+                
+                try:
+                    async with httpx.AsyncClient(timeout=10.0) as client:
+                        response = await client.post(url, json=payload)
+                        if response.status_code == 200:
+                            data = response.json()
+                            ai_reply = data["candidates"][0]["content"]["parts"][0]["text"]
+                            
+                            runs.complete(agent_run, {
+                                "logs": logs_list,
+                                "message": ai_reply,
+                                "coordinator_output": {"status": "chat_response"},
+                            })
+                            
+                            words = ai_reply.split(" ")
+                            for i, word in enumerate(words):
+                                chunk = (word + " ") if i < len(words) - 1 else word
+                                yield {"event": "message_chunk", "content": chunk, "sender": "assistant"}
+                                await asyncio.sleep(0.02)
+                                
+                            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", ai_reply)
+                            yield {"event": "message_complete", "id": str(assistant_msg.id), "content": ai_reply, "sender": "assistant"}
+                            return
+                except Exception as e:
+                    logger.exception("Failed to generate AI response for follow-up")
+                    
+            # Fallback if no API key or API fails
+            reply_msg = (
+                "Your itinerary is already generated and saved! "
+                "However, the AI service is currently unavailable for follow-up questions."
+            )
             runs.complete(agent_run, {
                 "logs": logs_list,
                 "message": reply_msg,
-                "coordinator_output": {"status": "already_completed"}
+                "coordinator_output": {"status": "already_completed"},
             })
-            
-            words = reply_msg.split(" ")
-            for i, word in enumerate(words):
-                chunk = (word + " ") if i < len(words) - 1 else word
-                yield {
-                    "event": "message_chunk",
-                    "content": chunk,
-                    "sender": "assistant"
-                }
+            for i, word in enumerate(reply_msg.split(" ")):
+                chunk = (word + " ") if i < len(reply_msg.split(" ")) - 1 else word
+                yield {"event": "message_chunk", "content": chunk, "sender": "assistant"}
                 await asyncio.sleep(0.02)
 
             assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", reply_msg)
-            yield {
-                "event": "message_complete",
-                "id": str(assistant_msg.id),
-                "content": reply_msg,
-                "sender": "assistant"
-            }
+            yield {"event": "message_complete", "id": str(assistant_msg.id), "content": reply_msg, "sender": "assistant"}
             return
 
         # Extract current state from history
         state = await parse_travel_state(history, destination)
-        budget = state.get("budget")
-        duration_days = state.get("duration_days")
-        dates = state.get("dates")
-        goal = state.get("goal")
-        conditions = state.get("conditions")
-        preferences = state.get("preferences") or []
+        budget: str | None = state.get("budget")
+        origin: str | None = state.get("origin")
+        duration_days_raw = state.get("duration_days")
+        dates: str | None = state.get("dates")
+        goal: str | None = state.get("goal")
+        preferences: list[str] = state.get("preferences") or []
 
         # Determine missing parameters
         missing_items = []
+        if not origin:
+            missing_items.append("origin")
         if not budget:
             missing_items.append("budget")
-        if not duration_days:
+        if not duration_days_raw:
             missing_items.append("duration")
-        if not dates:
-            missing_items.append("dates/time of travel")
         if not goal:
             missing_items.append("main goal or purpose")
 
         if missing_items:
-            # We are missing details; ask clarifying questions conversationally
             clarification_msg = (
                 f"I'd love to help you plan an amazing trip to **{destination}**! "
-                f"To get started on curating your itinerary, could you please provide a few more details?\n\n"
+                "To get started, could you please provide a few more details?\n\n"
             )
             for item in missing_items:
                 if item == "budget":
                     clarification_msg += "- **What is your budget?** (e.g., $1000, 50,000 INR, budget-friendly, luxury)\n"
+                elif item == "origin":
+                    clarification_msg += "- **Which city are you traveling from?**\n"
                 elif item == "duration":
                     clarification_msg += "- **How many days** would you like your trip to be?\n"
-                elif item == "dates/time of travel":
-                    clarification_msg += "- **When are you planning to go?** (e.g., specific dates, or a month/season like June or winter)\n"
                 elif item == "main goal or purpose":
-                    clarification_msg += "- **What is the main goal of your trip?** (e.g., relaxation, food exploration, business, honeymoon)\n"
-            clarification_msg += "\nOnce you share these, my specialist agents (Logistics, Lodging, and Experience) will immediately coordinate to compile your customized day-by-day plan!"
+                    clarification_msg += "- **What is the main goal of your trip?** (e.g., relaxation, food, honeymoon)\n"
+            clarification_msg += "\nOnce you share these, my agents will immediately coordinate to compile your plan!"
 
-            # Complete the Agent Run with status
             runs.complete(agent_run, {
                 "logs": logs_list,
                 "message": clarification_msg,
-                "coordinator_output": {
-                    "status": "clarification_needed",
-                    "missing": missing_items
-                }
+                "coordinator_output": {"status": "clarification_needed", "missing": missing_items},
             })
 
-            # Stream the clarifying response
             words = clarification_msg.split(" ")
             for i, word in enumerate(words):
                 chunk = (word + " ") if i < len(words) - 1 else word
-                yield {
-                    "event": "message_chunk",
-                    "content": chunk,
-                    "sender": "assistant"
-                }
+                yield {"event": "message_chunk", "content": chunk, "sender": "assistant"}
                 await asyncio.sleep(0.02)
 
             assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", clarification_msg)
-            yield {
-                "event": "message_complete",
-                "id": str(assistant_msg.id),
-                "content": clarification_msg,
-                "sender": "assistant"
-            }
+            yield {"event": "message_complete", "id": str(assistant_msg.id), "content": clarification_msg, "sender": "assistant"}
             return
 
-        # If we have all parameters, run the sub-agent pipeline
-        from app.agents.coordinator import coordinator_graph, AgentState
+        # All parameters collected — run the sub-agent planner graph
+        from app.agents.planner import planner_graph, AgentState
 
         state_input = AgentState(
+            trip_id=str(trip_id),
+            origin=origin,
             destination=destination,
             dates=dates,
             budget=budget,
             preferences=preferences,
             user_message=user_query,
-            agent_outputs={}
+            memory_context=[],
+            agent_outputs={},
         )
 
-        # Step 1: Run the Coordinator StateGraph skeleton
-        graph_output = await asyncio.to_thread(coordinator_graph.invoke, state_input)
-        coordinator_output = graph_output.get("agent_outputs", {}).get("coordinator", {})
-        coord_msg = f"[Coordinator] All parameters collected. Destination: {destination}, Budget: {budget}, Duration: {duration_days} days, Dates: {dates}. Initiating specialist agent collaboration."
-
-        yield {
-            "event": "agent_log",
-            "agent": "CoordinatorAgent",
-            "content": coord_msg
-        }
+        coord_msg = (
+            f"[Coordinator] All parameters collected. Destination: {destination}, "
+            f"Budget: {budget}, Duration: {duration_days_raw} days, Dates: {dates}. "
+            "Initiating core planning agents."
+        )
+        yield {"event": "agent_log", "agent": "CoordinatorAgent", "content": coord_msg}
         add_run_log("CoordinatorAgent", coord_msg)
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(0.5)
 
-        # Step 2: Logistics Agent fetches transport options
-        logistics_msg = f"[Logistics] Querying travel routes & flight options to {destination}. Found optimal route."
-        yield {
-            "event": "agent_log",
-            "agent": "LogisticsAgent",
-            "content": logistics_msg
-        }
-        add_run_log("LogisticsAgent", logistics_msg)
-        await asyncio.sleep(1.2)
+        mem_msg = f"[Memory] Retrieving past conversation context for {destination}..."
+        yield {"event": "agent_log", "agent": "MemoryAgent", "content": mem_msg}
+        add_run_log("MemoryAgent", mem_msg)
+        await asyncio.sleep(0.5)
 
-        # Step 3: Accommodation Agent searches stays
-        acc_msg = f"[Accommodation] Searching stays in {destination} within {budget} parameters."
-        yield {
-            "event": "agent_log",
-            "agent": "AccommodationAgent",
-            "content": acc_msg
-        }
-        add_run_log("AccommodationAgent", acc_msg)
-        await asyncio.sleep(1.2)
+        # Run the graph
+        graph_output = await asyncio.to_thread(planner_graph.invoke, state_input)
+        
+        weather_msg = f"[Weather] Checking real-time forecast and climate constraints for {destination}."
+        yield {"event": "agent_log", "agent": "WeatherAgent", "content": weather_msg}
+        add_run_log("WeatherAgent", weather_msg)
+        await asyncio.sleep(0.5)
 
-        # Step 4: Experience Agent curates activities
-        exp_msg = f"[Experiences] Compiling top attractions, local sightseeing spots, and culinary experiences in {destination}."
-        yield {
-            "event": "agent_log",
-            "agent": "ExperienceAgent",
-            "content": exp_msg
-        }
-        add_run_log("ExperienceAgent", exp_msg)
-        await asyncio.sleep(1.2)
+        attr_msg = f"[Attractions] Querying Google Places for top-rated spots matching your preferences."
+        yield {"event": "agent_log", "agent": "AttractionAgent", "content": attr_msg}
+        add_run_log("AttractionAgent", attr_msg)
+        await asyncio.sleep(0.5)
 
-        # Step 5: Supervisor compiles final plan & saves Itinerary
-        sup_msg = f"[Orchestrator] Budget constraints verified. Compiling consolidated day-by-day travel plan for {duration_days} days..."
-        yield {
-            "event": "agent_log",
-            "agent": "SupervisorAgent",
-            "content": sup_msg
-        }
-        add_run_log("SupervisorAgent", sup_msg)
-        await asyncio.sleep(0.8)
+        duration_days = int(duration_days_raw) if duration_days_raw else 3
+        planner_msg = f"[Planner] Tool execution complete. Merging data into final {duration_days}-day travel plan..."
+        yield {"event": "agent_log", "agent": "PlannerAgent", "content": planner_msg}
+        add_run_log("PlannerAgent", planner_msg)
+        await asyncio.sleep(0.5)
 
-        # Compile detailed day-by-day itinerary text based on duration
-        days_schedule_text = ""
-        for day in range(1, duration_days + 1):
-            if day == 1:
-                days_schedule_text += f"- **Day 1: Arrival & Landmarks**: Explore core historic monuments and local walking paths.\n"
-            elif day == 2:
-                days_schedule_text += f"- **Day 2: Gastronomy & Culture**: Visit popular central markets, museum exhibits, and street food stalls.\n"
-            elif day == duration_days:
-                days_schedule_text += f"- **Day {day}: Departure & Leisure**: Last minute souvenir shopping and departure preparations.\n"
-            elif day == 3:
-                days_schedule_text += f"- **Day 3: Scenic Excursions**: Relax in primary nature parks and take a scenic skyline tour.\n"
-            elif day % 2 == 0:
-                days_schedule_text += f"- **Day {day}: Hidden Gems**: Discover off-the-beaten-path neighborhoods and local cafes.\n"
-            else:
-                days_schedule_text += f"- **Day {day}: Adventure & Activity**: Engage in outdoor activities or interactive workshops.\n"
+        # Extract agent results
+        agent_outputs = graph_output.get("agent_outputs", {})
+        planner_res = agent_outputs.get("planner", {})
+        itinerary_text = planner_res.get("narrative", "")
 
+        if not itinerary_text:
+            itinerary_text = (
+                f"Here is your VoyagerAI travel itinerary for **{destination}**!\n\n"
+                f"*(Note: Failed to generate dynamic narrative. Using raw data fallback)*\n\n"
+            )
 
-        itinerary_text = (
-            f"Here is your completed VoyagerAI travel itinerary for **{destination}**!\n\n"
-            f"### ✈️ Flights & Transit (Logistics)\n"
-            f"- Round-trip flights successfully verified and mapped to local transit.\n\n"
-            f"### 🏨 Hotel & Lodging\n"
-            f"- Central boutique hotel selected within transit proximity.\n\n"
-            f"### 🗺️ Day-by-Day Experience Schedule\n"
-            f"{days_schedule_text}\n"
-            f"Enjoy your trip! Let me know if you would like to edit or book any segment."
-        )
-
-        # Save Itinerary to DB using repository
         itineraries = ItineraryRepository(db)
-        itinerary_db = itineraries.save(trip_id, itinerary_text)
+        itineraries.save(trip_id, itinerary_text)
 
-        # Update Agent Run status to completed using repository
-        output_payload = {
+        runs.complete(agent_run, {
             "logs": logs_list,
             "message": itinerary_text,
-            "coordinator_output": coordinator_output
-        }
-        runs.complete(agent_run, output_payload)
+            "coordinator_output": {},
+        })
 
-        # Yield actual itinerary text chunk by chunk to simulate streaming
         words = itinerary_text.split(" ")
         for i, word in enumerate(words):
             chunk = (word + " ") if i < len(words) - 1 else word
-            yield {
-                "event": "message_chunk",
-                "content": chunk,
-                "sender": "assistant"
-            }
+            yield {"event": "message_chunk", "content": chunk, "sender": "assistant"}
             await asyncio.sleep(0.02)
 
-        # Yield complete message token using repository
         assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", itinerary_text)
-
-        yield {
-            "event": "message_complete",
-            "id": str(assistant_msg.id),
-            "content": itinerary_text,
-            "sender": "assistant"
-        }
-
+        yield {"event": "message_complete", "id": str(assistant_msg.id), "content": itinerary_text, "sender": "assistant"}

@@ -14,6 +14,7 @@ import {
   getUserEmail, 
   signIn, 
   signUp, 
+  signInWithGoogle as supabaseSignInWithGoogle,
   signOut as supabaseSignOut 
 } from "@/lib/supabase";
 
@@ -29,6 +30,7 @@ type AuthContextValue = {
     email: string,
     password?: string
   ) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -123,6 +125,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const signInWithGoogle: AuthContextValue["signInWithGoogle"] = async () => {
+    setIsLoading(true);
+    const { error } = await supabaseSignInWithGoogle();
+    
+    if (isMockMode && !error) {
+       // Since there's no redirect in mock mode, manually trigger session update here
+       const email = "googleuser@gmail.com";
+       const mockToken = `mock-user-${email}`;
+       setSession({ access_token: mockToken });
+       setUser({ email, id: mockToken });
+    }
+    
+    setIsLoading(false);
+    return { error: error?.message ?? null };
+  };
+
   const signOut = async () => {
     setIsLoading(true);
     await supabaseSignOut();
@@ -139,6 +157,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         signInWithPassword,
         signUpWithPassword,
+        signInWithGoogle,
         signOut,
       }}
     >

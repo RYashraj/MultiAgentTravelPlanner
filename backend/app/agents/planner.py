@@ -1,4 +1,4 @@
-"""Planner Agent for orchestrating memory retrieval, weather, attractions, and merging."""
+"""Planner Agent: retrieves memory, fetches weather + attractions, then merges via Gemini."""
 import logging
 from typing import Any
 
@@ -9,11 +9,13 @@ from app.agents.state import AgentState
 from app.agents.weather_agent import weather_node
 from app.rag.chroma_store import ChromaMemoryStore
 from app.core.config import get_settings
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_core.messages import SystemMessage, HumanMessage
+from app.tools.weather_tool import get_weather
+from app.tools.places_tool import search_places
+from pydantic import SecretStr
 
 logger = logging.getLogger(__name__)
-
 
 def retrieve_memory_node(state: AgentState) -> dict[str, Any]:
     """Retrieves relevant past trip context from ChromaMemoryStore."""
@@ -24,105 +26,114 @@ def retrieve_memory_node(state: AgentState) -> dict[str, Any]:
         return {"memory_context": []}
 
     try:
+        from app.rag.chroma_store import ChromaMemoryStore
         store = ChromaMemoryStore()
         memory_context = store.retrieve_context(trip_id=trip_id, query=user_message, k=5)
     except Exception as exc:
-        logger.error("Error retrieving memory context in retrieve_memory_node: %s", exc, exc_info=True)
+        logger.error("Error retrieving memory context: %s", exc)
         memory_context = []
 
     return {"memory_context": memory_context}
 
 
+def fetch_data_node(state: AgentState) -> dict[str, Any]:
+    """Old fetch data node. Now obsolete, as Planner does it. Just passing through."""
+    return {}
+
+
 def merge_node(state: AgentState) -> dict[str, Any]:
-    """Uses Gemini to merge outputs from weather, attractions, and memory into a final planner draft."""
+    """Uses Gemini with real TOOL CALLING to fetch weather, attractions, and generate itinerary."""
     destination = state.get("destination", "")
     dates = state.get("dates")
     budget = state.get("budget")
-    preferences = state.get("preferences", [])
-    memory_context = state.get("memory_context", [])
-
+    preferences = list(state.get("preferences") or [])
+    memory_context = list(state.get("memory_context") or [])
     outputs = state.get("agent_outputs") or {}
-    weather = outputs.get("weather") or {}
-    attractions = outputs.get("attractions") or {}
 
-    weather_summary = weather.get("summary", "")
-    weather_warnings = list(weather.get("warnings") or [])
+    api_key = get_settings().gemini_api_key
+    gemini_success = False
+    full_narrative = ""
 
-    raw_items = attractions.get("items") or []
-    warnings: list[str] = list(weather_warnings)
-
-    is_rainy = any("rain" in str(w).lower() or "storm" in str(w).lower() for w in weather_warnings)
-    processed_attractions: list[dict[str, Any]] = []
-
-    for item in raw_items:
-        item_copy = dict(item)
-        if is_rainy and item_copy.get("outdoor"):
-            warning_msg = f"Weather warning ({', '.join(weather_warnings)}): Consider indoor alternative for outdoor attraction '{item_copy.get('name')}'."
-            if warning_msg not in warnings:
-                warnings.append(warning_msg)
-            item_copy["weather_flag"] = "outdoor_rain_risk"
-        processed_attractions.append(item_copy)
-
-    try:
-        api_key = get_settings().gemini_api_key
-        if not api_key:
-            raise ValueError("Gemini API key missing")
+    if api_key:
+        try:
+            llm = ChatGoogleGenerativeAI(
+                model="gemini-2.0-flash",
+                api_key=SecretStr(api_key),
+                max_retries=1,
+                request_timeout=30,
+            )
+            # Bind our tools to the LLM
+            llm_with_tools = llm.bind_tools([get_weather, search_places])
             
-        llm = ChatGoogleGenerativeAI(model="gemini-2.0-flash", api_key=api_key)
-        sys_msg = SystemMessage(content="You are an expert travel planner. Write a comprehensive, engaging itinerary draft in Markdown.")
-        
-        user_prompt = f"""
-        Destination: {destination}
-        Dates: {dates}
-        Budget: {budget}
-        Preferences: {', '.join(preferences)}
-        
-        Weather Forecast: {weather_summary}
-        Weather Warnings: {', '.join(warnings) if warnings else 'None'}
-        
-        Suggested Attractions: {processed_attractions}
-        
-        Past Conversation Memory: {memory_context}
-        
-        Please draft the final itinerary response. Highlight any weather concerns.
-        """
-        response = llm.invoke([sys_msg, HumanMessage(content=user_prompt)])
-        narrative = str(response.content)
-    except Exception as e:
-        logger.error(f"Error invoking Gemini in merge_node: {e}")
-        attraction_names = [a.get("name", "") for a in processed_attractions if a.get("name")]
-        attractions_str = ", ".join(attraction_names) if attraction_names else "No specific attractions found"
-        narrative = (
-            f"Itinerary Draft for {destination} ({dates or 'Flexible dates'}):\n"
-            f"Weather Outlook: {weather_summary or 'Standard forecast'}.\n"
-            f"Recommended Attractions ({len(processed_attractions)}): {attractions_str}.\n"
-            f"Budget Level: {budget or 'Unspecified'} | Preferences: {', '.join(preferences) if preferences else 'General'}"
-        )
+            sys_msg = SystemMessage(
+                content=(
+                    "You are the VoyagerAI Planner Agent. You MUST use your tools (get_weather, search_places) "
+                    "to fetch real-world data about the destination before writing the itinerary. "
+                    "Once you have the data, write a detailed, engaging day-by-day itinerary in Markdown format."
+                )
+            )
+            user_prompt = (
+                f"Please plan a trip to {destination}.\n"
+                f"Dates: {dates}\n"
+                f"Budget: {budget}\n"
+                f"Preferences: {', '.join(preferences)}\n\n"
+                f"Past Context: {memory_context}\n\n"
+                "First, call the get_weather tool. Then call the search_places tool to find attractions and hotels. "
+                "Finally, use that data to write the day-by-day itinerary."
+            )
+            
+            messages = [sys_msg, HumanMessage(content=user_prompt)]
+            
+            # Step 1: LLM decides which tools to call
+            response = llm_with_tools.invoke(messages)
+            messages.append(response)
+            
+            # Step 2: Execute tool calls if any
+            if response.tool_calls:
+                logger.info(f"Planner Agent executing {len(response.tool_calls)} tool calls.")
+                for tc in response.tool_calls:
+                    if tc["name"] == "get_weather":
+                        tool_res = get_weather.invoke(tc["args"])
+                    elif tc["name"] == "search_places":
+                        tool_res = search_places.invoke(tc["args"])
+                    else:
+                        tool_res = "Unknown tool"
+                    
+                    messages.append(ToolMessage(content=str(tool_res), tool_call_id=tc["id"]))
+                
+                # Step 3: LLM generates final itinerary using the tool data
+                final_response = llm_with_tools.invoke(messages)
+                full_narrative = str(final_response.content) if final_response.content else ""
+                gemini_success = True
+            else:
+                # Fallback if it didn't call tools
+                full_narrative = str(response.content) if response.content else ""
+                gemini_success = True
+                
+        except Exception as e:
+            logger.warning("Gemini Planner failed (%s). Using fallback.", type(e).__name__)
+
+    if not gemini_success:
+        # Fallback to local data
+        w_data = get_weather.invoke({"location": destination})
+        p_data = search_places.invoke({"location": destination, "query_type": "all"})
+        full_narrative = f"# VoyagerAI Itinerary for {destination}\n\n**Weather:** {w_data}\n\n**Places:** {p_data}"
 
     planner_output = {
-        "destination": destination,
-        "dates": dates,
-        "weather_summary": weather_summary,
-        "attractions": processed_attractions,
-        "warnings": warnings,
-        "narrative": narrative,
-        "used_memory": memory_context,
+        "narrative": full_narrative,
+        "gemini_used": gemini_success,
     }
 
     return {"agent_outputs": {**outputs, "planner": planner_output}}
 
-
 workflow = StateGraph(AgentState)
 workflow.add_node("retrieve_memory", retrieve_memory_node)
-workflow.add_node("weather", weather_node)
-workflow.add_node("attractions", attraction_node)
+workflow.add_node("fetch_data", fetch_data_node)
 workflow.add_node("merge", merge_node)
 
 workflow.add_edge(START, "retrieve_memory")
-workflow.add_edge("retrieve_memory", "weather")
-workflow.add_edge("retrieve_memory", "attractions")
-workflow.add_edge("weather", "merge")
-workflow.add_edge("attractions", "merge")
+workflow.add_edge("retrieve_memory", "fetch_data")
+workflow.add_edge("fetch_data", "merge")
 workflow.add_edge("merge", END)
 
 planner_graph = workflow.compile()
