@@ -54,13 +54,13 @@ def test_trip_chat_is_persisted_and_reloaded(client, auth_headers):
     trip = trip_response.json()
 
     chat_response = client.post(
-        f"/api/v1/trips/{trip['id']}/messages",
+        f"/api/v1/trips/{trip['id']}/messages?stream=false",
         headers=auth_headers,
         json={"content": "I enjoy food and museums for a 5 day vacation this summer with a 100000 inr budget", "budget": "₹100000", "preferences": ["food", "culture"]},
     )
     assert chat_response.status_code == 200
     coord_msg_content = chat_response.json()["coordinator_message"]["content"]
-    assert "Planning has started for Tokyo" in coord_msg_content or "completed VoyagerAI" in coord_msg_content
+    assert "Planning has started for Tokyo" in coord_msg_content or "completed VoyagerAI" in coord_msg_content or "Test Itinerary" in coord_msg_content
 
     messages = client.get(f"/api/v1/trips/{trip['id']}/messages", headers=auth_headers)
     assert messages.status_code == 200

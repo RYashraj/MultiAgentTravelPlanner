@@ -1,115 +1,130 @@
+"""
+Parser Agent: extracts structured travel parameters from chat history.
+
+Tries Gemini first (JSON mode) — falls back to regex heuristics if unavailable.
+"""
+import asyncio
 import json
 import logging
 import re
-from typing import Any, List, Dict
+import random
+from typing import Any
+
 import httpx
 
 from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-def heuristic_parse(messages: List[Any], destination: str) -> Dict[str, Any]:
-    """Fallback parser using regex and keyword matching when Gemini API is unavailable."""
-    # Concatenate all user messages to analyze the cumulative state
-    full_text_parts = []
+
+# ---------------------------------------------------------------------------
+# Heuristic fallback
+# ---------------------------------------------------------------------------
+
+def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
+    """Regex/keyword fallback when Gemini is unavailable."""
+    parts: list[str] = []
+    asked_origin = False
+    origin = None
+
     for msg in messages:
         role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None)
         content = getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None)
-        if role == "user" and content:
-            full_text_parts.append(content)
-            
-    full_text = " ".join(full_text_parts).lower()
-    
-    # 0. Extract Origin
-    origin = None
-    origin_match = re.search(r'(?:from|out of|leaving|departing)\s+([a-zA-Z\s]+?)(?:\s+to|\s+for|,|\.|$)', full_text)
-    if origin_match and not origin_match.group(1).strip() in ["here", "home"]:
-        origin = origin_match.group(1).strip().capitalize()
         
-    # 1. Extract Budget
-    budget = None
-    # Look for currency symbols ($/Rs/₹/€/£) followed by digits, or digits followed by currencies/words
-    budget_match = re.search(
-        r'(?:[\$\u20B9\u20AC\u00A3]\s*\d+[\d,]*|\d+[\d,]*\s*(?:usd|inr|rs|rupees|euro|euros|pounds|gbp))', 
-        full_text
-    )
-    if budget_match:
-        budget = budget_match.group(0).strip()
-    elif "budget" in full_text or "luxury" in full_text or "cheap" in full_text:
-        if "not an issue" in full_text or "no limit" in full_text or "unlimited" in full_text or "don't care" in full_text or "luxury" in full_text:
-            budget = "Luxury / No limit"
-        elif "budget-friendly" in full_text or "cheap" in full_text:
-            budget = "Budget-friendly"
-        else:
-            num_match = re.search(r'budget.*?(\d+[\d,]*)', full_text)
-            if num_match:
-                budget = f"${num_match.group(1)}"
+        if not content:
+            continue
             
-    # 2. Extract Duration (Days)
+        if role == "assistant":
+            if "Where will you be travelling from?" in content:
+                asked_origin = True
+        elif role == "user":
+            parts.append(content)
+            if asked_origin and len(content.split()) <= 4:
+                clean_content = re.sub(r'^(?:i am )?(?:from|traveling from|departing from|leaving from|coming from)\s+', '', content.lower(), flags=re.IGNORECASE)
+                origin = clean_content.strip().title()
+            asked_origin = False
+
+    text = " ".join(parts).lower()
+
+    # Origin — only match explicit departure phrases, not loose "from"
+    # Origin — only match explicit departure phrases, not loose "from" (if not already found contextually)
+    if not origin:
+        m = re.search(r'\b(?:traveling|departing|flying|leaving|coming)\s+(?:from)\s+([a-zA-Z\s]+?)(?:\s+to\b|\s+for\b|,|\.|$)', text)
+        if m:
+            candidate = m.group(1).strip()
+            if candidate not in ("here", "home", "there", "the"):
+                origin = candidate.title()
+
+    # Budget
+    budget = None
+    m = re.search(r'(?:[\$\u20B9\u20AC\u00A3]\s*\d[\d,]*|\d[\d,]*\s*(?:usd|inr|rs|rupees?|euros?|pounds?|gbp))', text)
+    if m:
+        budget = m.group(0).strip()
+    elif re.search(r'\b(?:no limit|unlimited|luxury)\b', text):
+        budget = "Luxury / No limit"
+    elif re.search(r'\b(?:budget.friendly|cheap|low.cost)\b', text):
+        budget = "Budget-friendly"
+    else:
+        m = re.search(r'budget.*?(\d[\d,]+)', text)
+        if m:
+            budget = f"${m.group(1)}"
+
+    # Duration
     duration_days = None
-    duration_match = re.search(r'(\d+)\s*(?:day|days|night|nights)', full_text)
-    if duration_match:
+    m = re.search(r'(\d+)\s*(?:day|night)s?', text)
+    if m:
         try:
-            duration_days = int(duration_match.group(1))
+            duration_days = int(m.group(1))
         except ValueError:
             pass
-    elif "one week" in full_text or "a week" in full_text:
+    elif re.search(r'\b(?:one week|a week)\b', text):
         duration_days = 7
-    elif "weekend" in full_text:
+    elif "weekend" in text:
         duration_days = 2
-        
-    # 3. Extract Dates / Timing
+
+    # Dates / season
     dates = None
     months = [
-        "january", "february", "march", "april", "may", "june", 
+        "january", "february", "march", "april", "may", "june",
         "july", "august", "september", "october", "november", "december",
-        "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec"
+        "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "oct", "nov", "dec",
     ]
-    for m in months:
-        if re.search(r'\b' + m + r'\b', full_text):
-            dates = m.capitalize()
+    for mon in months:
+        if re.search(r'\b' + mon + r'\b', text):
+            dates = mon.capitalize()
             break
-            
     if not dates:
-        if "summer" in full_text:
-            dates = "Summer"
-        elif "winter" in full_text:
-            dates = "Winter"
-        elif "spring" in full_text:
-            dates = "Spring"
-        elif "autumn" in full_text or "fall" in full_text:
-            dates = "Autumn"
-        elif "next month" in full_text:
-            dates = "Next month"
-            
-    # 4. Extract Preferences
-    preferences = []
-    keywords = [
-        "food", "cuisine", "restaurant", "museum", "history", "culture", 
-        "sightseeing", "beach", "nature", "shopping", "adventure", "hiking", 
-        "relax", "luxury", "budget", "family", "friends", "solo"
-    ]
-    for kw in keywords:
-        if re.search(r'\b' + kw + r'\b', full_text):
-            preferences.append(kw)
-            
-    # 5. Extract Goal / Purpose
-    goal = None
-    goal_match = re.search(r'(?:goal|plan|purpose)\s+(?:is|hai|bolato|for)\s+([a-zA-Z\s]+?)(?:\s+and|\s+but|,|\.|$)', full_text)
-    if goal_match:
-        goal = goal_match.group(1).strip().capitalize()
-    else:
-        goal_keywords = ["honeymoon", "anniversary", "business", "work", "backpacking", "vacation", "holiday", "relaxation", "explore", "food", "party", "spiritual", "medical", "shopping", "beach", "beaches", "sightseeing", "streetwear", "streetware"]
-        for kw in goal_keywords:
-            if re.search(r'\b' + kw + r'\b', full_text):
-                goal = kw.capitalize()
+        for season, label in [("summer", "Summer"), ("winter", "Winter"), ("spring", "Spring"), ("autumn", "Autumn"), ("fall", "Autumn")]:
+            if season in text:
+                dates = label
                 break
-            
-    # 6. Extract Conditions
+    if not dates and "next month" in text:
+        dates = "Next month"
+
+    # Preferences
+    preference_keywords = [
+        "food", "cuisine", "restaurant", "museum", "history", "culture",
+        "sightseeing", "beach", "nature", "shopping", "adventure", "hiking",
+        "relax", "luxury", "budget", "family", "friends", "solo",
+    ]
+    preferences = [kw for kw in preference_keywords if re.search(r'\b' + kw + r'\b', text)]
+
+    # Goal
+    goal = None
+    goal_keywords = [
+        "honeymoon", "anniversary", "business", "work", "backpacking",
+        "vacation", "holiday", "relaxation", "explore", "food", "party",
+        "spiritual", "medical", "shopping", "beach", "sightseeing",
+    ]
+    for kw in goal_keywords:
+        if re.search(r'\b' + kw + r'\b', text):
+            goal = kw.capitalize()
+            break
+
+    # Conditions
     conditions = None
-    if "vegan" in full_text or "vegetarian" in full_text or "allergies" in full_text or "wheelchair" in full_text or "kids" in full_text or "pets" in full_text:
-        # Simple heuristic, just flag that there are special conditions mentioned
-        conditions = "User mentioned specific needs (dietary, accessibility, or companions)"
+    if re.search(r'\b(?:vegan|vegetarian|allergies|wheelchair|kids|children|pets)\b', text):
+        conditions = "User mentioned specific needs"
 
     return {
         "origin": origin,
@@ -119,85 +134,86 @@ def heuristic_parse(messages: List[Any], destination: str) -> Dict[str, Any]:
         "dates": dates,
         "goal": goal,
         "conditions": conditions,
-        "preferences": preferences
+        "preferences": preferences,
     }
 
-async def parse_travel_state(messages: List[Any], destination: str) -> Dict[str, Any]:
+
+# ---------------------------------------------------------------------------
+# Gemini-powered extraction
+# ---------------------------------------------------------------------------
+
+async def parse_travel_state(messages: list[Any], destination: str) -> dict[str, Any]:
     """
-    Extracts the travel plan parameters from the chat history.
-    Uses the Google Gemini API if configured, otherwise falls back to heuristics.
+    Extract travel-plan parameters from chat history.
+    Uses Gemini JSON mode when configured; falls back to heuristics.
     """
     settings = get_settings()
-    
-    # Format chat history text for analysis
-    history_lines = []
+
+    history_lines: list[str] = []
     for msg in messages:
         role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None)
         content = getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None)
         if role and content:
             sender = "User" if role == "user" else "Assistant"
             history_lines.append(f"{sender}: {content}")
-            
     chat_history_text = "\n".join(history_lines)
-    
+
     if settings.gemini_api_key:
         prompt = (
             f"You are the travel coordinator agent for VoyagerAI.\n"
-            f"Your task is to analyze the chat history between the user and the assistant "
-            f"for a trip to '{destination}' and extract the current planning parameters.\n\n"
-            f"CRITICAL INSTRUCTION: DO NOT guess, assume, or hallucinate any values. If the user has not explicitly provided a value in the chat history, you MUST set it to null.\n\n"
-            f"Return ONLY a raw JSON object with the following fields:\n"
-            f"- origin: string or null (extract the city the user is departing from, e.g. 'New York', 'Delhi', 'London')\n"
-            f"- destination: string (default to '{destination}')\n"
-            f"- budget: string or null (extract any budget amount, e.g. '$1000', '50000 INR'. If user says 'no limit', 'not an issue', or 'luxury', extract exactly that. Null ONLY if not mentioned at all.)\n"
-            f"- duration_days: integer or null (extract number of days of the trip, e.g. 3, 5, 7. E.g., 'a week' -> 7)\n"
-            f"- dates: string or null (extract travel dates, season, or month, e.g. 'June', 'Dec 1-5', 'any time', 'next month')\n"
-            f"- goal: string or null (extract the primary goal, purpose, or main activity of the trip. E.g., 'honeymoon', 'relaxation', 'business', 'shopping', 'beaches'. If the user says 'goal is X' or 'plan is Y', extract that exact value as the goal!)\n"
-            f"- conditions: string or null (extract any specific conditions, restrictions or requirements, e.g. 'wheelchair accessible', 'vegan', 'traveling with kids')\n"
-            f"- preferences: array of strings (extract secondary user preferences or activities, e.g. ['food', 'museums'])\n\n"
-            f"Chat History:\n"
-            f"{chat_history_text}"
+            f"Analyze the chat history for a trip to '{destination}' and extract planning parameters.\n\n"
+            f"CRITICAL: Do NOT guess or hallucinate. If a value is not explicitly stated, set it to null.\n\n"
+            f"Return ONLY a raw JSON object with these fields:\n"
+            f"- origin: string or null (city the user departs from)\n"
+            f"- destination: string (default: '{destination}')\n"
+            f"- budget: string or null (e.g. '$1000', '50000 INR', 'luxury', 'no limit')\n"
+            f"- duration_days: integer or null (number of trip days)\n"
+            f"- dates: string or null (travel month, season, or date range)\n"
+            f"- goal: string or null (primary trip purpose: honeymoon, relaxation, business, etc.)\n"
+            f"- conditions: string or null (dietary, accessibility, or companion requirements)\n"
+            f"- preferences: array of strings (secondary interests)\n\n"
+            f"Chat History:\n{chat_history_text}"
         )
-        
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={settings.gemini_api_key}"
+
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"gemini-2.0-flash:generateContent?key={settings.gemini_api_key}"
+        )
         payload = {
-            "contents": [
-                {
-                    "parts": [
-                        {
-                            "text": prompt
-                        }
-                    ]
-                }
-            ],
-            "generationConfig": {
-                "responseMimeType": "application/json"
-            }
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {"responseMimeType": "application/json"},
         }
-        
+
+        max_retries = 6
+        base_delay = 5.0
+
         try:
-            async with httpx.AsyncClient(timeout=5.0) as client:
-                response = await client.post(url, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    text_out = data["candidates"][0]["content"]["parts"][0]["text"]
-                    parsed = json.loads(text_out)
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                for attempt in range(max_retries):
+                    response = await client.post(url, json=payload)
+                    if response.status_code == 200:
+                        data = response.json()
+                        text_out = data["candidates"][0]["content"]["parts"][0]["text"]
+                        parsed = json.loads(text_out)
+                        return {
+                            "origin": parsed.get("origin"),
+                            "destination": parsed.get("destination") or destination,
+                            "budget": parsed.get("budget"),
+                            "duration_days": parsed.get("duration_days"),
+                            "dates": parsed.get("dates"),
+                            "goal": parsed.get("goal"),
+                            "conditions": parsed.get("conditions"),
+                            "preferences": parsed.get("preferences") or [],
+                        }
+                    elif response.status_code == 429 and attempt < max_retries - 1:
+                        sleep_time = (base_delay * (2 ** attempt)) + random.uniform(0, 3)
+                        logger.warning("Gemini 429 (attempt %d). Retrying in %.1f seconds...", attempt + 1, sleep_time)
+                        await asyncio.sleep(sleep_time)
+                        continue
                     
-                    # Basic validation of expected structure
-                    return {
-                        "origin": parsed.get("origin"),
-                        "destination": parsed.get("destination") or destination,
-                        "budget": parsed.get("budget"),
-                        "duration_days": parsed.get("duration_days"),
-                        "dates": parsed.get("dates"),
-                        "goal": parsed.get("goal"),
-                        "conditions": parsed.get("conditions"),
-                        "preferences": parsed.get("preferences", [])
-                    }
-                else:
-                    logger.warning(f"Gemini API returned status {response.status_code}: {response.text}")
-        except Exception as e:
-            logger.exception("Failed to call Gemini API for travel state parsing; falling back to heuristics")
-            
-    # Fallback to heuristics
+                    logger.warning("Gemini returned status %s for parse_travel_state", response.status_code)
+                    break
+        except Exception:
+            logger.exception("Gemini parse_travel_state failed — using heuristics")
+
     return heuristic_parse(messages, destination)

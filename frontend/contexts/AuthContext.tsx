@@ -128,15 +128,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signInWithGoogle: AuthContextValue["signInWithGoogle"] = async () => {
     setIsLoading(true);
     const { error } = await supabaseSignInWithGoogle();
-    
+
     if (isMockMode && !error) {
-       // Since there's no redirect in mock mode, manually trigger session update here
-       const email = "googleuser@gmail.com";
-       const mockToken = `mock-user-${email}`;
-       setSession({ access_token: mockToken });
-       setUser({ email, id: mockToken });
+      // supabaseSignInWithGoogle already wrote mock-user token to localStorage.
+      // Re-read it here so the context state stays in sync.
+      const token = getSessionToken();
+      const email = getUserEmail();
+      if (token && email) {
+        setSession({ access_token: token });
+        setUser({ email, id: token });
+      }
     }
-    
+
     setIsLoading(false);
     return { error: error?.message ?? null };
   };

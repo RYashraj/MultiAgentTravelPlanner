@@ -25,10 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Run tests with coverage
         env:
           DATABASE_URL: sqlite:///./test.db
-        run: pytest tests/ -v
+          ENVIRONMENT: test
+        run: pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=50
 
   frontend:
     runs-on: ubuntu-latest
@@ -52,4 +53,8 @@ jobs:
         run: npm run lint
 
       - name: Build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+          NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
         run: npm run build

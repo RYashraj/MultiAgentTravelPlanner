@@ -12,74 +12,101 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.main import app
 
+# Create a module-level engine for tests
+test_engine = create_engine(
+    "sqlite:///:memory:",
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+
+def override_get_db():
+    try:
+        db = TestingSessionLocal()
+        yield db
+    finally:
+        db.close()
+
+@pytest.fixture(scope="session", autouse=True)
+def setup_test_db():
+    Base.metadata.create_all(bind=test_engine)
+    yield
+    Base.metadata.drop_all(bind=test_engine)
+
+@pytest.fixture()
+def db_session():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @pytest.fixture()
 def client():
-    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Base.metadata.create_all(engine)
-    session_local = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    def override_db():
-        db = session_local()
-        try:
-            yield db
-        finally:
-            db.close()
-
     settings = get_settings()
     original_secret = settings.supabase_jwt_secret
     settings.supabase_jwt_secret = "week-3-test-secret"
-    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
     settings.supabase_jwt_secret = original_secret
-    Base.metadata.drop_all(engine)
-
 
 @pytest.fixture(autouse=True)
-def mock_planner_graph_stream(monkeypatch):
-    from app.agents.planner import planner_graph
-    from app.agents.supervisor import SupervisorAgent
+def mock_agent_calls(monkeypatch):
+    """Mock Gemini API calls so tests run fast and offline."""
+    from app.agents import coordinator
+    from app.agents import planner
+    from app.agents import supervisor
+
+    async def fake_parse_state(messages, destination):
+        # Always return a complete state to bypass gating
+        return {
+            "origin": "Test City",
+            "destination": destination,
+            "budget": "$5000",
+            "duration_days": 3,
+            "dates": "Next month",
+            "goal": "Relaxation",
+            "preferences": ["Food"],
+        }
     
-    def fake_stream(state, *args, **kwargs):
-        class FakeChunk:
-            def __init__(self, content):
-                self.content = content
-        
-        yield {"some_step": state}
-        yield {
-            "merge": {
-                "agent_outputs": {
-                    "planner": {
-                        "narrative_stream": [FakeChunk("Planning has started for "), FakeChunk(state.get("destination", "unknown"))],
-                        "narrative": "Planning has started for " + state.get("destination", "unknown")
+    def fake_coordinator_invoke(state):
+        return {
+            "agent_outputs": {
+                "coordinator": {
+                    "status": "planning_started",
+                    "trip_context": {
+                        "origin": state.get("origin"),
+                        "destination": state.get("destination", "Test"),
+                        "budget": state.get("budget"),
+                        "dates": state.get("dates"),
+                        "preferences": state.get("preferences", [])
                     }
                 }
             }
         }
-    
-    async def fake_run_orchestration_stream(self, db, trip_id, user_message, user):
-        from app.db.models import Itinerary, AgentRun
-        itinerary = Itinerary(trip_id=trip_id, content="Day 1: Test")
-        db.add(itinerary)
-        agent_run = AgentRun(trip_id=trip_id, agent_name="CoordinatorAgent", status="completed", output_payload={"logs": [1,2,3,4,5]})
-        db.add(agent_run)
-        db.commit()
 
-        yield {"event": "agent_log", "data": "log"}
-        yield {"event": "message_chunk", "data": "chunk"}
-        yield {"event": "message_complete", "data": "complete"}
-        
-    monkeypatch.setattr(planner_graph, "stream", fake_stream)
-    monkeypatch.setattr(SupervisorAgent, "run_orchestration_stream", fake_run_orchestration_stream)
+    def fake_planner_invoke(state):
+        return {
+            "agent_outputs": {
+                "planner": {
+                    "narrative": "# Test Itinerary\nDay 1: Testing",
+                    "gemini_used": False
+                }
+            }
+        }
+
+    monkeypatch.setattr(supervisor, "parse_travel_state", fake_parse_state)
+    monkeypatch.setattr(coordinator.coordinator_graph, "invoke", fake_coordinator_invoke)
+    monkeypatch.setattr(planner.planner_graph, "invoke", fake_planner_invoke)
 
 @pytest.fixture()
 def auth_headers():
+    static_id = "12345678-1234-5678-1234-567812345678"
     token = jwt.encode(
-        {"sub": str(uuid.uuid4()), "email": "traveler@example.com", "aud": "authenticated"},
+        {"sub": static_id, "email": "traveler@example.com", "aud": "authenticated"},
         "week-3-test-secret",
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
-
