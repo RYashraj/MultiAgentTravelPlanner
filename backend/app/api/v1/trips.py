@@ -89,7 +89,6 @@ def delete_trip(
     trip = _owned_trip(trip_id, user, db)
     db.delete(trip)
     db.commit()
-    return None
 
 
 @router.get("/{trip_id}/messages", response_model=list[MessageResponse])

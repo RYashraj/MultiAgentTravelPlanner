@@ -1,6 +1,7 @@
 """ChromaDB Vector Store module."""
 import logging
 from typing import Any
+
 import chromadb
 from chromadb.config import Settings
 

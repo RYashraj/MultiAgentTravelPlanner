@@ -1,4 +1,3 @@
-import uuid
 
 import jwt
 import pytest
@@ -55,9 +54,7 @@ def client():
 @pytest.fixture(autouse=True)
 def mock_agent_calls(monkeypatch):
     """Mock Gemini API calls so tests run fast and offline."""
-    from app.agents import coordinator
-    from app.agents import planner
-    from app.agents import supervisor
+    from app.agents import coordinator, planner, supervisor
 
     async def fake_parse_state(messages, destination):
         # Always return a complete state to bypass gating

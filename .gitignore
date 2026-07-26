@@ -54,3 +54,11 @@ MultiAgentTravelPlanner-main/
 
 # Root-level orphan lock file (no Node project at repo root)
 /package-lock.json
+
+# Type checkers / Linters / Cache
+.mypy_cache/
+.ruff_cache/
+
+# Logs and temp files
+*.log
+*.tmp

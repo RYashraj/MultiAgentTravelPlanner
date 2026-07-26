@@ -6,7 +6,11 @@
   ],
   "exclude": [
     "MultiAgentTravelPlanner-main",
-    "MultiAgentTravelPlanner-main.zip"
+    "MultiAgentTravelPlanner-main.zip",
+    "**/venv",
+    "**/.venv",
+    "**/node_modules",
+    "**/.next"
   ],
   "typeCheckingMode": "basic"
 }

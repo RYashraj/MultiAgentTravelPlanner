@@ -18,10 +18,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 
-from app.db import models  # noqa: F401 — registers all ORM models on Base.metadata
 from app.api.v1 import auth, health, trips
 from app.core.auth_middleware import SupabaseJWTMiddleware
 from app.core.config import get_settings
+from app.db import models  # noqa: F401 — registers all ORM models on Base.metadata
 from app.db.base import Base
 from app.db.session import engine
 

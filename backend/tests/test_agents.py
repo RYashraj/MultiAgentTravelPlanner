@@ -1,7 +1,10 @@
 import uuid
+
 import pytest
+
 from app.agents.supervisor import SupervisorAgent
-from app.db.models import User, Trip, Itinerary, AgentRun, Message
+from app.db.models import AgentRun, Itinerary, Trip, User
+
 
 @pytest.mark.anyio
 async def test_supervisor_agent_orchestration(db_session):

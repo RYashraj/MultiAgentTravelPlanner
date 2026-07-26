@@ -1,6 +1,5 @@
 import uuid
 from datetime import datetime
-from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -19,8 +18,8 @@ class TripResponse(BaseModel):
 
 class MessageCreate(BaseModel):
     content: str = Field(min_length=1, max_length=4000)
-    dates: Optional[str] = Field(default=None, max_length=100)
-    budget: Optional[str] = Field(default=None, max_length=100)
+    dates: str | None = Field(default=None, max_length=100)
+    budget: str | None = Field(default=None, max_length=100)
     preferences: list[str] = Field(default_factory=list)
 
 
@@ -35,8 +34,8 @@ class MessageResponse(BaseModel):
 class ChatResponse(BaseModel):
     user_message: dict
     coordinator_message: dict
-    itinerary: Optional[str] = None
-    run_id: Optional[str] = None
+    itinerary: str | None = None
+    run_id: str | None = None
 
 
 class ItineraryResponse(BaseModel):

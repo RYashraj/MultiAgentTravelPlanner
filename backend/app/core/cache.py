@@ -52,7 +52,7 @@ def with_redis_cache(ttl_seconds: int = 3600, key_prefix: str = "cache"):
             cache_key = ""
             client = None
             try:
-                key_args = f"{args}-{kwargs}".encode("utf-8")
+                key_args = f"{args}-{kwargs}".encode()
                 key_hash = hashlib.md5(key_args).hexdigest()
                 cache_key = f"voyagerai:{key_prefix}:{func.__name__}:{key_hash}"
                 client = get_session_cache().client

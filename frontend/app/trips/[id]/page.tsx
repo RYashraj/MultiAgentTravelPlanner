@@ -7,7 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getSessionToken, signOut } from "@/lib/supabase";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
-import { LogOut, Send, Terminal, Calendar, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin } from "lucide-react";
+import { LogOut, Send, Terminal, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin } from "lucide-react";
 
 function renderMarkdown(content: string) {
   if (!content) return null;
@@ -100,11 +100,6 @@ type Message = {
   isStreaming?: boolean;
 };
 
-type Itinerary = {
-  id: string;
-  content: string;
-  status: string;
-};
 
 type Trip = {
   id: string;
@@ -120,9 +115,7 @@ function ChatPageContent() {
 
   const [trip, setTrip] = useState<Trip | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
-  const [itineraries, setItineraries] = useState<Itinerary[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
-  const [itinerariesLoading, setItinerariesLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [inputMessage, setInputMessage] = useState("");
@@ -134,22 +127,6 @@ function ChatPageContent() {
 
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
 
-  const fetchItineraries = useCallback(async () => {
-    try {
-      setItinerariesLoading(true);
-      const data = await apiFetch<Itinerary>(`/trips/${tripId}/itineraries`);
-      // Backend returns a single itinerary object
-      setItineraries(data && data.id ? [data] : []);
-    } catch (err: any) {
-      // 404 = no itinerary yet — totally normal, not an error
-      if (err?.status !== 404) {
-        console.error("Failed to load itineraries:", err);
-      }
-      setItineraries([]);
-    } finally {
-      setItinerariesLoading(false);
-    }
-  }, [tripId]);
 
   // 1. Fetch Trip details and Messages History
   useEffect(() => {
@@ -174,12 +151,11 @@ function ChatPageContent() {
     }
 
     loadData();
-    fetchItineraries();
 
     return () => {
       cancelled = true;
     };
-  }, [tripId, fetchItineraries]);
+  }, [tripId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -302,7 +278,6 @@ function ChatPageContent() {
                     : msg
                 )
               );
-              fetchItineraries();
               setActiveAgent(null);
             } else if (resolvedType === "agent_log") {
               setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
@@ -324,7 +299,6 @@ function ChatPageContent() {
                     : msg
                 )
               );
-              fetchItineraries();
               setActiveAgent(null);
             }
           } catch (pErr) {
@@ -390,11 +364,11 @@ function ChatPageContent() {
             {loadError}
           </div>
         ) : (
-          /* Main Workspace Split Layout */
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-3 gap-6 items-stretch">
+          /* Main Workspace Full-Width Layout */
+          <div className="flex-1 min-h-0 flex flex-col items-stretch">
             
-            {/* Left & Middle Column: Interactive Workspace */}
-            <div className="lg:col-span-2 flex flex-col min-h-0 border border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] overflow-hidden backdrop-blur-xl shadow-2xl shadow-indigo-900/20 relative group">
+            {/* Interactive Workspace */}
+            <div className="flex-1 flex flex-col min-h-0 border border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] overflow-hidden backdrop-blur-xl shadow-2xl shadow-indigo-900/20 relative group">
               <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               
               {/* Pipeline Stepper (Always Visible at Top) */}
@@ -534,42 +508,6 @@ function ChatPageContent() {
                 <div className="px-6 pb-4 text-xs text-red-400 bg-slate-950/15">{sendError}</div>
               )}
             </div>
-
-            {/* Right Column: Compiled Itineraries Display */}
-            <aside className="border min-h-0 border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] p-6 flex flex-col space-y-5 backdrop-blur-xl shadow-2xl shadow-purple-900/10">
-              <div className="flex items-center gap-3 text-xs font-bold text-slate-300 uppercase tracking-widest border-b border-slate-700/50 pb-4 select-none shrink-0">
-                <div className="p-1.5 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
-                  <Calendar className="w-4 h-4 text-indigo-400" />
-                </div>
-                <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Generated Itineraries</span>
-              </div>
-
-              <div className="flex-1 overflow-y-auto space-y-4 pr-1">
-                {itinerariesLoading ? (
-                  <div className="flex items-center justify-center py-12">
-                    <Loader className="w-6 h-6 text-indigo-400 animate-spin" />
-                  </div>
-                ) : itineraries.length === 0 ? (
-                  <div className="text-center py-16 bg-slate-950/10 border border-dashed border-slate-850 rounded-2xl p-6 text-slate-500 text-xs italic leading-relaxed">
-                    No compiled itinerary plans yet. Message your coordinator agent to compile one!
-                  </div>
-                ) : (
-                  itineraries.map((it) => (
-                    <div key={it.id} className="bg-slate-800/40 border border-slate-700/50 hover:border-indigo-500/30 rounded-2xl p-5 space-y-3 text-xs transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-default">
-                      <div className="flex justify-between items-center text-slate-100 font-semibold border-b border-slate-700/50 pb-3">
-                        <span className="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-md border border-indigo-500/20">📋 Itinerary</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${it.status === "planning" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
-                          {it.status}
-                        </span>
-                      </div>
-                      <div className="text-slate-300 leading-relaxed font-sans text-[12px] group-hover:text-slate-200 transition-colors max-h-64 overflow-y-auto pr-1">
-                        {renderMarkdown(it.content)}
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </aside>
 
           </div>
         )}

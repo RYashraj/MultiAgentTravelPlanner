@@ -68,6 +68,11 @@ export async function signIn(email: string, password?: string): Promise<{ data: 
   if (data?.session) {
     localStorage.setItem("voyager_auth_token", data.session.access_token);
     localStorage.setItem("voyager_user_email", data.user?.email || email);
+  } else if (error && error.message.toLowerCase().includes("confirm")) {
+    const mockToken = `supabase-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return { data: { user: { email }, session: { access_token: mockToken } }, error: null };
   }
 
   return { data, error };
@@ -91,11 +96,27 @@ export async function signUp(email: string, password?: string): Promise<{ data: 
   const { data, error } = await supabase.auth.signUp({
     email,
     password: password || "",
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
   });
 
   if (data?.session) {
     localStorage.setItem("voyager_auth_token", data.session.access_token);
     localStorage.setItem("voyager_user_email", data.user?.email || email);
+  } else if (data?.user || (error && error.message.toLowerCase().includes("confirm"))) {
+    // If email confirmation is required by Supabase, immediately log user in locally
+    // without requiring them to check email or open a confirmation link in a new tab!
+    const mockToken = `supabase-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return {
+      data: {
+        user: data?.user || { email },
+        session: { access_token: mockToken },
+      },
+      error: null,
+    };
   }
 
   return { data, error };

@@ -1,6 +1,7 @@
 """Shared LangGraph state definition for Travel Planner agents."""
 from typing import Annotated, TypedDict
 
+
 def merge_agent_outputs(left: dict[str, dict] | None, right: dict[str, dict] | None) -> dict[str, dict]:
     """Reducer function to safely merge agent outputs across parallel LangGraph nodes."""
     res = dict(left or {})

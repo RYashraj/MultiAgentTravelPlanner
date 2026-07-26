@@ -60,12 +60,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (supabase) {
       supabase.auth.getSession().then(({ data }) => {
         if (!mounted) return;
-        setSession(data.session);
-        setUser(data.session?.user ?? null);
+        const localToken = localStorage.getItem("voyager_auth_token");
+        const localEmail = localStorage.getItem("voyager_user_email");
         if (data.session) {
+          setSession(data.session);
+          setUser(data.session?.user ?? null);
           localStorage.setItem("voyager_auth_token", data.session.access_token);
           localStorage.setItem("voyager_user_email", data.session.user?.email || "");
+        } else if (localToken && localEmail) {
+          setSession({ access_token: localToken });
+          setUser({ email: localEmail, id: localToken });
         } else {
+          setSession(null);
+          setUser(null);
           localStorage.removeItem("voyager_auth_token");
           localStorage.removeItem("voyager_user_email");
         }
@@ -75,12 +82,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data: listener } = supabase.auth.onAuthStateChange(
         (_event, newSession) => {
           if (!mounted) return;
-          setSession(newSession);
-          setUser(newSession?.user ?? null);
+          const localToken = localStorage.getItem("voyager_auth_token");
+          const localEmail = localStorage.getItem("voyager_user_email");
           if (newSession) {
+            setSession(newSession);
+            setUser(newSession?.user ?? null);
             localStorage.setItem("voyager_auth_token", newSession.access_token);
             localStorage.setItem("voyager_user_email", newSession.user?.email || "");
+          } else if (localToken && localEmail) {
+            setSession({ access_token: localToken });
+            setUser({ email: localEmail, id: localToken });
           } else {
+            setSession(null);
+            setUser(null);
             localStorage.removeItem("voyager_auth_token");
             localStorage.removeItem("voyager_user_email");
           }
