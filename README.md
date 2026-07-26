@@ -84,10 +84,10 @@ User Request
 
 | Member | Role |
 |---|---|
-| **Yashraj** | Captain — Backend, Agents, Architecture |
-| **Hetvi** | Backend, DB models |
-| **Shreyas** | Backend, Auth, CI |
-| **Meet** | Frontend, Streaming UI |
+| **Yashraj** | Captain |
+| **Hetvi** | |
+| **Shreyas** | |
+| **Meet** | |
 
 ---
 
