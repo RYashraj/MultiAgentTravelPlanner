@@ -1,50 +1,4 @@
-# pyrefly: ignore [missing-import]
-import pytest
-import uuid
-from fastapi.testclient import TestClient
-# pyrefly: ignore [missing-import]
-from sqlalchemy import create_engine
-# pyrefly: ignore [missing-import]
-from sqlalchemy.pool import StaticPool
-# pyrefly: ignore [missing-import]
-from sqlalchemy.orm import sessionmaker
-
-from app.db.session import get_db
-from app.db.base import Base
-from app.db.models import User, Trip, Message
-from app.main import app
-
-test_engine = create_engine(
-    "sqlite:///:memory:",
-    connect_args={"check_same_thread": False},
-    poolclass=StaticPool,
-)
-TestSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
-
-def override_get_db():
-    db = TestSessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-# Create tables in test DB
-Base.metadata.create_all(bind=test_engine)
-
-@pytest.fixture(autouse=True, scope="module")
-def setup_database():
-    app.dependency_overrides[get_db] = override_get_db
-    yield
-    app.dependency_overrides.pop(get_db, None)
-
-client = TestClient(app)
-
-# Use a mock authorization header for testing
-headers = {
-    "Authorization": "Bearer mock-user-testuser@example.com"
-}
-
-def test_create_trip():
+def test_create_trip(client, auth_headers):
     # Test unauthorized request
     response = client.post("/api/v1/trips", json={"destination": "Tokyo"})
     assert response.status_code == 401
@@ -53,7 +7,7 @@ def test_create_trip():
     response = client.post(
         "/api/v1/trips", 
         json={"destination": "Tokyo"},
-        headers=headers
+        headers=auth_headers
     )
     assert response.status_code == 201
     body = response.json()
@@ -62,12 +16,12 @@ def test_create_trip():
     assert "id" in body
 
 
-def test_list_trips():
+def test_list_trips(client, auth_headers):
     # Insert multiple trips for the user
-    client.post("/api/v1/trips", json={"destination": "Paris"}, headers=headers)
-    client.post("/api/v1/trips", json={"destination": "Rome"}, headers=headers)
+    client.post("/api/v1/trips", json={"destination": "Paris"}, headers=auth_headers)
+    client.post("/api/v1/trips", json={"destination": "Rome"}, headers=auth_headers)
 
-    response = client.get("/api/v1/trips", headers=headers)
+    response = client.get("/api/v1/trips", headers=auth_headers)
     assert response.status_code == 200
     trips = response.json()
     assert len(trips) >= 2
@@ -76,26 +30,26 @@ def test_list_trips():
         assert trip["destination"] in ["Tokyo", "Paris", "Rome"]
 
 
-def test_send_and_get_messages():
+def test_send_and_get_messages(client, auth_headers):
     # 1. Create a trip
-    trip_res = client.post("/api/v1/trips", json={"destination": "London"}, headers=headers)
+    trip_res = client.post("/api/v1/trips", json={"destination": "London"}, headers=auth_headers)
     trip_id = trip_res.json()["id"]
 
     # 2. Post a message (non-stream)
     msg_res = client.post(
-        f"/api/v1/trips/{trip_id}/messages", 
+        f"/api/v1/trips/{trip_id}/messages?stream=false", 
         json={"content": "Please suggest a 3 day relaxation plan for June with a 2000 usd budget"},
-        headers=headers
+        headers=auth_headers
     )
     assert msg_res.status_code == 200
     body = msg_res.json()
     assert "user_message" in body
     assert "coordinator_message" in body
     assert body["user_message"]["content"] == "Please suggest a 3 day relaxation plan for June with a 2000 usd budget"
-    assert "VoyagerAI" in body["coordinator_message"]["content"]
+    assert "Test Itinerary" in body["coordinator_message"]["content"]
 
     # 3. Retrieve messages
-    list_res = client.get(f"/api/v1/trips/{trip_id}/messages", headers=headers)
+    list_res = client.get(f"/api/v1/trips/{trip_id}/messages", headers=auth_headers)
     assert list_res.status_code == 200
     messages = list_res.json()
     assert len(messages) == 2
@@ -103,27 +57,26 @@ def test_send_and_get_messages():
     assert messages[1]["role"] == "assistant"
 
 
-def test_stream_message():
+def test_stream_message(client, auth_headers):
     # 1. Create a trip
-    trip_res = client.post("/api/v1/trips", json={"destination": "Berlin"}, headers=headers)
+    trip_res = client.post("/api/v1/trips", json={"destination": "Berlin"}, headers=auth_headers)
     trip_id = trip_res.json()["id"]
 
     # 2. Post a message with stream=True
     response = client.post(
         f"/api/v1/trips/{trip_id}/messages?stream=true",
         json={"content": "Suggest historical sites for a 4 day vacation this summer with 1500 usd"},
-        headers=headers
+        headers=auth_headers
     )
     assert response.status_code == 200
     assert "text/event-stream" in response.headers["content-type"]
     
     # Read the streamed lines
-    lines = [line for line in response.iter_lines()]
-    # Check that we have event stream items
-    has_chunk = any("message_chunk" in line for line in lines)
-    has_user_msg = any("user_message" in line for line in lines)
-    has_complete = any("message_complete" in line for line in lines)
+    lines = [line if isinstance(line, str) else line.decode('utf-8') for line in response.iter_lines()]
     
-    assert has_user_msg
-    assert has_chunk
-    assert has_complete
+    # Check that we have event stream items
+    has_token = any("token" in line for line in lines)
+    has_result = any("result" in line for line in lines)
+    
+    assert has_token
+    assert has_result

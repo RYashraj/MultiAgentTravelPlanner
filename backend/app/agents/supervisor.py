@@ -1,28 +1,42 @@
 """
-Supervisor Agent Orchestrator.
-Manages the travel planning pipeline, orchestrates sub-agents,
-and records session metrics to the database.
+SupervisorAgent: the single orchestration entry point for all message sends.
+
+Responsibilities:
+  1. Post-itinerary conversational follow-up (Gemini, streaming)
+  2. Gating: parse travel state, ask for clarification if params are missing
+  3. Run coordinator_graph (logistics, accommodation, experience context)
+  4. Run planner_graph (RAG memory retrieval + Gemini itinerary synthesis)
+  5. Stream SSE events throughout
+  6. Write Message, Itinerary, AgentRun to the database
 """
 import asyncio
 import json
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import AsyncGenerator, Any
+from typing import Any, AsyncGenerator
 
+import httpx
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.models import User, Trip, Message, Itinerary, AgentRun
+from app.agents.coordinator import coordinator_graph
+from app.agents.parser import parse_travel_state
+from app.agents.planner import planner_graph
+from app.agents.state import AgentState
+from app.core.config import get_settings
+from app.db.models import Itinerary
 from app.repositories import AgentRunRepository, ItineraryRepository, MessageRepository, TripRepository
 
 logger = logging.getLogger(__name__)
 
-from app.agents.parser import parse_travel_state
+_GEMINI_MODEL = "gemini-2.0-flash"
+
 
 class SupervisorAgent:
     """
-    Coordinates sub-agent tasks, validates budget constraints, compiles final
-    itineraries, and logs running session metrics.
+    Coordinates the full multi-agent planning pipeline for a single user message.
+    Yields SSE-compatible event dicts throughout execution.
     """
 
     async def run_orchestration_stream(
@@ -30,258 +44,302 @@ class SupervisorAgent:
         db: Session,
         trip_id: uuid.UUID,
         user_query: str,
-        current_user: Any
+        current_user: Any,
     ) -> AsyncGenerator[dict, None]:
         """
-        Executes the multi-agent planning simulation step-by-step.
-        Yields logs and intermediate chunks, then writes Itinerary/clarifying messages and AgentRun to the DB.
+        Execute the planning pipeline step-by-step, yielding progress events.
+
+        Event types:
+          agent_log   — intermediate status messages
+          token       — itinerary text token (for streaming display)
+          result      — final payload with message IDs and full content
+          error       — error payload
         """
-        # Retrieve the trip
+        messages_repo = MessageRepository(db)
+        runs_repo = AgentRunRepository(db)
+        itinerary_repo = ItineraryRepository(db)
+
+        # Fetch the trip
         trip = TripRepository(db).get_for_user(trip_id, current_user.id)
         if not trip:
+            yield {"event": "error", "content": "Trip not found"}
             return
+
         destination = trip.destination
 
-        # Initialize Agent Run session in DB
-        runs = AgentRunRepository(db)
-        input_payload = {"user_query": user_query}
-        agent_run = runs.start(trip_id, input_payload)
+        # Start an agent run record
+        agent_run = runs_repo.start(trip_id, {"user_query": user_query})
+        run_logs: list[dict] = []
 
-        logs_list = []
-        def add_run_log(agent: str, content: str):
-            logs_list.append({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "agent": agent,
-                "content": content
-            })
+        def emit_log(agent: str, content: str) -> dict:
+            entry = {"timestamp": datetime.now(timezone.utc).isoformat(), "agent": agent, "content": content}
+            run_logs.append(entry)
+            return {"event": "agent_log", "agent": agent, "content": content}
 
-        # Load message history
-        messages_repo = MessageRepository(db)
+        # Load full message history for context
         history = messages_repo.list_for_trip(trip_id)
 
-        # Check if itinerary already exists to prevent endless regeneration loop
-        from sqlalchemy import select
-        from app.db.models import Itinerary
+        # ----------------------------------------------------------------
+        # Case 1: Itinerary already exists → AI follow-up conversation
+        # ----------------------------------------------------------------
         existing_itinerary = db.scalar(select(Itinerary).where(Itinerary.trip_id == trip_id))
-        
+
         if existing_itinerary:
-            reply_msg = "Your itinerary is already generated and finalized! We are holding work here for now. Next week, conversational AI features will be added so we can chat further! If you want a new plan right now, please create a new trip."
-            
-            runs.complete(agent_run, {
-                "logs": logs_list,
-                "message": reply_msg,
-                "coordinator_output": {"status": "already_completed"}
-            })
-            
-            words = reply_msg.split(" ")
-            for i, word in enumerate(words):
-                chunk = (word + " ") if i < len(words) - 1 else word
-                yield {
-                    "event": "message_chunk",
-                    "content": chunk,
-                    "sender": "assistant"
-                }
-                await asyncio.sleep(0.02)
-
-            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", reply_msg)
-            yield {
-                "event": "message_complete",
-                "id": str(assistant_msg.id),
-                "content": reply_msg,
-                "sender": "assistant"
-            }
-            return
-
-        # Extract current state from history
-        state = await parse_travel_state(history, destination)
-        budget = state.get("budget")
-        duration_days = state.get("duration_days")
-        dates = state.get("dates")
-        goal = state.get("goal")
-        conditions = state.get("conditions")
-        preferences = state.get("preferences") or []
-
-        # Determine missing parameters
-        missing_items = []
-        if not budget:
-            missing_items.append("budget")
-        if not duration_days:
-            missing_items.append("duration")
-        if not dates:
-            missing_items.append("dates/time of travel")
-        if not goal:
-            missing_items.append("main goal or purpose")
-
-        if missing_items:
-            # We are missing details; ask clarifying questions conversationally
-            clarification_msg = (
-                f"I'd love to help you plan an amazing trip to **{destination}**! "
-                f"To get started on curating your itinerary, could you please provide a few more details?\n\n"
+            yield emit_log("Supervisor", f"Itinerary for {destination} already exists — generating follow-up response.")
+            ai_reply = await self._generate_followup_reply(
+                destination=destination,
+                itinerary_content=existing_itinerary.content,
+                history=history,
+                user_query=user_query,
             )
-            for item in missing_items:
-                if item == "budget":
-                    clarification_msg += "- **What is your budget?** (e.g., $1000, 50,000 INR, budget-friendly, luxury)\n"
-                elif item == "duration":
-                    clarification_msg += "- **How many days** would you like your trip to be?\n"
-                elif item == "dates/time of travel":
-                    clarification_msg += "- **When are you planning to go?** (e.g., specific dates, or a month/season like June or winter)\n"
-                elif item == "main goal or purpose":
-                    clarification_msg += "- **What is the main goal of your trip?** (e.g., relaxation, food exploration, business, honeymoon)\n"
-            clarification_msg += "\nOnce you share these, my specialist agents (Logistics, Lodging, and Experience) will immediately coordinate to compile your customized day-by-day plan!"
+            runs_repo.complete(agent_run, {"logs": run_logs, "mode": "followup", "reply": ai_reply})
 
-            # Complete the Agent Run with status
-            runs.complete(agent_run, {
-                "logs": logs_list,
-                "message": clarification_msg,
-                "coordinator_output": {
-                    "status": "clarification_needed",
-                    "missing": missing_items
-                }
-            })
-
-            # Stream the clarifying response
-            words = clarification_msg.split(" ")
-            for i, word in enumerate(words):
-                chunk = (word + " ") if i < len(words) - 1 else word
-                yield {
-                    "event": "message_chunk",
-                    "content": chunk,
-                    "sender": "assistant"
-                }
-                await asyncio.sleep(0.02)
-
-            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", clarification_msg)
-            yield {
-                "event": "message_complete",
-                "id": str(assistant_msg.id),
-                "content": clarification_msg,
-                "sender": "assistant"
-            }
+            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", ai_reply)
+            async for event in self._stream_text(ai_reply, assistant_msg):
+                yield event
             return
 
-        # If we have all parameters, run the sub-agent pipeline
-        from app.agents.coordinator import coordinator_graph, AgentState
+        # ----------------------------------------------------------------
+        # Case 2: New planning session — extract state, gate, then plan
+        # ----------------------------------------------------------------
+        yield emit_log("Supervisor", f"Analysing chat history for {destination}…")
+        history_dicts = [{"role": m.role, "content": m.content} for m in history]
+        state = await parse_travel_state(history_dicts, destination)
 
-        state_input = AgentState(
+        origin: str | None = state.get("origin")
+        budget: str | None = state.get("budget")
+        duration_days_raw = state.get("duration_days")
+        dates: str | None = state.get("dates")
+        goal: str | None = state.get("goal")
+        preferences: list[str] = state.get("preferences") or []
+
+        missing: list[str] = []
+        if not origin:
+            missing.append("origin (where are you travelling from?)")
+        if not budget:
+            missing.append("budget")
+        if not duration_days_raw:
+            missing.append("duration (how many days)")
+        if not goal:
+            missing.append("main goal or purpose")
+
+        if missing or not origin or not budget or not duration_days_raw or not goal:
+            # -------------------------------------------------------
+            # Case 2a: Parameters missing → request clarification
+            # -------------------------------------------------------
+            clarification = self._build_clarification_message(destination, missing)
+            runs_repo.complete(
+                agent_run,
+                {"logs": run_logs, "mode": "clarification", "missing": missing},
+            )
+            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", clarification)
+            async for event in self._stream_text(clarification, assistant_msg):
+                yield event
+            return
+
+        # -------------------------------------------------------
+        # Case 2b: All params present → full planning pipeline
+        # -------------------------------------------------------
+        duration_days = int(duration_days_raw) if duration_days_raw else 3
+        
+        yield emit_log("Supervisor", f"Validating trip feasibility from {origin} to {destination} for {duration_days} days...")
+        feasibility_check = await self._validate_trip_feasibility(origin, destination, duration_days, goal)
+        if feasibility_check != "YES":
+            runs_repo.complete(agent_run, {"logs": run_logs, "mode": "clarification", "error": "infeasible trip"})
+            assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", feasibility_check)
+            async for event in self._stream_text(feasibility_check, assistant_msg):
+                yield event
+            return
+
+        agent_state = AgentState(
+            trip_id=str(trip_id),
+            origin=origin,
             destination=destination,
             dates=dates,
             budget=budget,
+            goal=goal,
+            duration_days=duration_days,
             preferences=preferences,
             user_message=user_query,
-            agent_outputs={}
+            memory_context=[],
+            agent_outputs={},
         )
 
-        # Step 1: Run the Coordinator StateGraph skeleton
-        graph_output = await asyncio.to_thread(coordinator_graph.invoke, state_input)
-        coordinator_output = graph_output.get("agent_outputs", {}).get("coordinator", {})
-        coord_msg = f"[Coordinator] All parameters collected. Destination: {destination}, Budget: {budget}, Duration: {duration_days} days, Dates: {dates}. Initiating specialist agent collaboration."
+        yield emit_log(
+            "Coordinator",
+            f"All parameters collected — Destination: {destination}, Budget: {budget}, "
+            f"Duration: {duration_days} days, Dates: {dates or 'flexible'}. Launching agents.",
+        )
+        await asyncio.sleep(0.3)
 
-        yield {
-            "event": "agent_log",
-            "agent": "CoordinatorAgent",
-            "content": coord_msg
-        }
-        add_run_log("CoordinatorAgent", coord_msg)
-        await asyncio.sleep(1.0)
+        yield emit_log("MemoryAgent", f"Retrieving past conversation context for {destination}…")
+        await asyncio.sleep(0.2)
 
-        # Step 2: Logistics Agent fetches transport options
-        logistics_msg = f"[Logistics] Querying travel routes & flight options to {destination}. Found optimal route."
-        yield {
-            "event": "agent_log",
-            "agent": "LogisticsAgent",
-            "content": logistics_msg
-        }
-        add_run_log("LogisticsAgent", logistics_msg)
-        await asyncio.sleep(1.2)
+        # --- Step 1: Run coordinator graph (logistics + accommodation + experience) ---
+        yield emit_log("CoordinatorGraph", "Running logistics, accommodation, and experience agents…")
+        try:
+            coord_output = await coordinator_graph.ainvoke(agent_state)
+            agent_state = {**agent_state, "agent_outputs": coord_output.get("agent_outputs", {})}
+        except Exception:
+            logger.exception("Coordinator graph failed — continuing with empty context")
+            coord_output = {}
 
-        # Step 3: Accommodation Agent searches stays
-        acc_msg = f"[Accommodation] Searching stays in {destination} within {budget} parameters."
-        yield {
-            "event": "agent_log",
-            "agent": "AccommodationAgent",
-            "content": acc_msg
-        }
-        add_run_log("AccommodationAgent", acc_msg)
-        await asyncio.sleep(1.2)
+        yield emit_log("WeatherAgent", f"Fetching weather and climate data for {destination}…")
+        await asyncio.sleep(0.2)
 
-        # Step 4: Experience Agent curates activities
-        exp_msg = f"[Experiences] Compiling top attractions, local sightseeing spots, and culinary experiences in {destination}."
-        yield {
-            "event": "agent_log",
-            "agent": "ExperienceAgent",
-            "content": exp_msg
-        }
-        add_run_log("ExperienceAgent", exp_msg)
-        await asyncio.sleep(1.2)
+        yield emit_log("AttractionAgent", f"Searching top-rated spots and local experiences in {destination}…")
+        await asyncio.sleep(0.2)
 
-        # Step 5: Supervisor compiles final plan & saves Itinerary
-        sup_msg = f"[Orchestrator] Budget constraints verified. Compiling consolidated day-by-day travel plan for {duration_days} days..."
-        yield {
-            "event": "agent_log",
-            "agent": "SupervisorAgent",
-            "content": sup_msg
-        }
-        add_run_log("SupervisorAgent", sup_msg)
-        await asyncio.sleep(0.8)
+        yield emit_log("PlannerAgent", f"Synthesising final {duration_days}-day itinerary with Gemini…")
 
-        # Compile detailed day-by-day itinerary text based on duration
-        days_schedule_text = ""
-        for day in range(1, duration_days + 1):
-            if day == 1:
-                days_schedule_text += f"- **Day 1: Arrival & Landmarks**: Explore core historic monuments and local walking paths.\n"
-            elif day == 2:
-                days_schedule_text += f"- **Day 2: Gastronomy & Culture**: Visit popular central markets, museum exhibits, and street food stalls.\n"
-            elif day == duration_days:
-                days_schedule_text += f"- **Day {day}: Departure & Leisure**: Last minute souvenir shopping and departure preparations.\n"
-            elif day == 3:
-                days_schedule_text += f"- **Day 3: Scenic Excursions**: Relax in primary nature parks and take a scenic skyline tour.\n"
-            elif day % 2 == 0:
-                days_schedule_text += f"- **Day {day}: Hidden Gems**: Discover off-the-beaten-path neighborhoods and local cafes.\n"
-            else:
-                days_schedule_text += f"- **Day {day}: Adventure & Activity**: Engage in outdoor activities or interactive workshops.\n"
+        # --- Step 2: Run planner graph (RAG + Gemini synthesis) ---
+        try:
+            planner_output = await planner_graph.ainvoke(agent_state)
+        except Exception:
+            logger.exception("Planner graph failed")
+            planner_output = {}
 
+        agent_outputs = planner_output.get("agent_outputs", {})
+        planner_res = agent_outputs.get("planner", {})
+        itinerary_text = planner_res.get("narrative", "")
 
-        itinerary_text = (
-            f"Here is your completed VoyagerAI travel itinerary for **{destination}**!\n\n"
-            f"### ✈️ Flights & Transit (Logistics)\n"
-            f"- Round-trip flights successfully verified and mapped to local transit.\n\n"
-            f"### 🏨 Hotel & Lodging\n"
-            f"- Central boutique hotel selected within transit proximity.\n\n"
-            f"### 🗺️ Day-by-Day Experience Schedule\n"
-            f"{days_schedule_text}\n"
-            f"Enjoy your trip! Let me know if you would like to edit or book any segment."
+        if not itinerary_text:
+            itinerary_text = (
+                f"# VoyagerAI Travel Plan — {destination}\n\n"
+                "I wasn't able to generate a full itinerary at this time. "
+                "Please try again or check that the Gemini API key is configured."
+            )
+
+        # --- Step 3: Persist results ---
+        itinerary_repo.save(trip_id, itinerary_text)
+        trip.status = "planning"
+        db.commit()
+
+        # Embed itinerary into ChromaDB for future context retrieval (best-effort)
+        try:
+            from app.agents.planner import _get_chroma_store
+            store = _get_chroma_store()
+            if store:
+                store.embed_message(str(trip_id), f"itinerary-{trip_id}", "assistant", itinerary_text)
+        except Exception as exc:
+            logger.debug("Chroma embed after planning failed: %s", exc)
+
+        runs_repo.complete(
+            agent_run,
+            {
+                "logs": run_logs,
+                "mode": "planning",
+                "gemini_used": planner_res.get("gemini_used", False),
+                "narrative_length": len(itinerary_text),
+            },
         )
 
-        # Save Itinerary to DB using repository
-        itineraries = ItineraryRepository(db)
-        itinerary_db = itineraries.save(trip_id, itinerary_text)
+        assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", itinerary_text)
+        async for event in self._stream_text(itinerary_text, assistant_msg):
+            yield event
 
-        # Update Agent Run status to completed using repository
-        output_payload = {
-            "logs": logs_list,
-            "message": itinerary_text,
-            "coordinator_output": coordinator_output
-        }
-        runs.complete(agent_run, output_payload)
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
 
-        # Yield actual itinerary text chunk by chunk to simulate streaming
-        words = itinerary_text.split(" ")
+    async def _generate_followup_reply(
+        self,
+        destination: str,
+        itinerary_content: str,
+        history: list,
+        user_query: str,
+    ) -> str:
+        """Generate a conversational AI reply when itinerary already exists."""
+        settings = get_settings()
+        if settings.gemini_api_key:
+            history_text = "\n".join(
+                [f"{m.role}: {m.content}" for m in history[-6:]]
+            )
+            prompt = (
+                f"You are the VoyagerAI travel assistant. An itinerary for {destination} has been generated.\n\n"
+                f"Current Itinerary:\n{itinerary_content[:2000]}\n\n"
+                f"Recent Chat History:\n{history_text}\n\n"
+                f"User's latest message: {user_query}\n\n"
+                "Respond helpfully and conversationally. If they ask about hotels, flights, or modifications, "
+                "suggest options or explain how the itinerary could be adjusted. Use Markdown for formatting."
+            )
+            url = (
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"{_GEMINI_MODEL}:generateContent?key={settings.gemini_api_key}"
+            )
+            try:
+                async with httpx.AsyncClient(timeout=20.0) as client:
+                    response = await client.post(url, json={"contents": [{"parts": [{"text": prompt}]}]})
+                    if response.status_code == 200:
+                        data = response.json()
+                        return data["candidates"][0]["content"]["parts"][0]["text"]
+            except Exception:
+                logger.exception("Gemini follow-up reply failed")
+
+        return (
+            "Your itinerary is already saved! Feel free to ask me any follow-up questions "
+            "about your trip, hotels, activities, or modifications."
+        )
+
+    @staticmethod
+    def _build_clarification_message(destination: str, missing: list[str]) -> str:
+        msg = (
+            f"I'd love to help you plan an amazing trip to **{destination}**! "
+            "To get started, could you share a few more details?\n\n"
+        )
+        for item in missing:
+            if "budget" in item:
+                msg += "- **What is your budget?** (e.g., $1,000, ₹50,000, luxury, budget-friendly)\n"
+            elif "duration" in item:
+                msg += "- **How many days** would you like the trip to be?\n"
+            elif "goal" in item:
+                msg += "- **What is the main goal of your trip?** (e.g., relaxation, honeymoon, food tour, adventure)\n"
+            elif "origin" in item:
+                msg += "- **Where will you be travelling from?**\n"
+        msg += "\nOnce you share these, my agents will immediately coordinate your full plan! ✈️"
+        return msg
+
+    async def _validate_trip_feasibility(self, origin: str, destination: str, duration_days: int, goal: str) -> str:
+        """Check if the trip makes logical sense (distance vs duration)."""
+        settings = get_settings()
+        if not settings.gemini_api_key:
+            return "YES"
+            
+        prompt = (
+            f"A user wants to travel from {origin} to {destination} for a {duration_days}-day trip. "
+            f"Their main goal is: {goal}. "
+            "Is this trip realistically feasible? Consider flight/travel times. For example, travelling halfway across the world for just 1 or 2 days is generally not feasible. "
+            "If it is feasible, respond with exactly 'YES'. "
+            "If it is NOT feasible, explain briefly and conversationally why it is not possible and ask them to adjust their duration or destination."
+        )
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/"
+            f"{_GEMINI_MODEL}:generateContent?key={settings.gemini_api_key}"
+        )
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.post(url, json={"contents": [{"parts": [{"text": prompt}]}]})
+                if response.status_code == 200:
+                    data = response.json()
+                    res = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                    if res.upper().startswith("YES"):
+                        return "YES"
+                    return res
+        except Exception as exc:
+            logger.warning("Feasibility check failed: %s", exc)
+        return "YES"
+
+    @staticmethod
+    async def _stream_text(text: str, assistant_msg) -> AsyncGenerator[dict, None]:
+        """Yield token-level events then a final result event."""
+        words = text.split(" ")
         for i, word in enumerate(words):
             chunk = (word + " ") if i < len(words) - 1 else word
-            yield {
-                "event": "message_chunk",
-                "content": chunk,
-                "sender": "assistant"
-            }
-            await asyncio.sleep(0.02)
-
-        # Yield complete message token using repository
-        assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", itinerary_text)
+            yield {"event": "token", "content": chunk}
+            await asyncio.sleep(0.01)
 
         yield {
-            "event": "message_complete",
-            "id": str(assistant_msg.id),
-            "content": itinerary_text,
-            "sender": "assistant"
+            "event": "result",
+            "message_id": str(assistant_msg.id),
+            "content": text,
         }
-

@@ -30,7 +30,11 @@ def get_jwks_client(jwks_url: str) -> PyJWKClient:
 
 def verify_access_token(token: str) -> CurrentUser:
     """Verify legacy HS256 and current Supabase ES256/RS256 access tokens."""
-    if token.startswith("mock-user-"):
+    settings = get_settings()
+
+    # Mock bypass: only active in local development/testing environments.
+    # In production this branch is never reachable.
+    if settings.environment in ("development", "test") and token.startswith("mock-user-"):
         email = token.replace("mock-user-", "")
         if "@" not in email:
             email = f"{email}@example.com"
@@ -38,12 +42,12 @@ def verify_access_token(token: str) -> CurrentUser:
         return CurrentUser(
             id=mock_id,
             email=email,
-            full_name=email.split("@")[0].capitalize()
+            full_name=email.split("@")[0].capitalize(),
         )
 
-    settings = get_settings()
     if not settings.supabase_url and not settings.supabase_jwt_secret:
         raise InvalidTokenError("Supabase authentication is not configured")
+
     try:
         algorithm = jwt.get_unverified_header(token).get("alg")
         if algorithm == "HS256":
@@ -68,6 +72,7 @@ def verify_access_token(token: str) -> CurrentUser:
             )
         else:
             raise InvalidTokenError("Unsupported JWT signing algorithm")
+
         return CurrentUser(
             id=payload["sub"],
             email=payload.get("email", ""),

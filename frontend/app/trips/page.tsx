@@ -65,12 +65,40 @@ function TripsPageContent() {
         method: "POST",
         body: JSON.stringify({ destination: destination.trim() }),
       });
-      router.push(`/trips/${trip.id}`);
+      
+      // Auto Geolocation
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const coords = `${pos.coords.latitude},${pos.coords.longitude}`;
+            localStorage.setItem(`voyager_location_${trip.id}`, coords);
+            router.push(`/trips/${trip.id}`);
+          },
+          (err) => {
+            console.warn("Geolocation denied or failed", err);
+            router.push(`/trips/${trip.id}`);
+          },
+          { timeout: 5000 }
+        );
+      } else {
+        router.push(`/trips/${trip.id}`);
+      }
     } catch (err) {
       setCreateError(
         err instanceof Error ? err.message : "Couldn't create that trip."
       );
       setIsCreating(false);
+    }
+  };
+
+  const handleDeleteTrip = async (tripId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to delete this trip?")) return;
+    try {
+      await apiFetch(`/trips/${tripId}`, { method: "DELETE" });
+      setTrips((prev) => prev.filter((t) => t.id !== tripId));
+    } catch (err) {
+      alert("Failed to delete trip.");
     }
   };
 
@@ -153,7 +181,7 @@ function TripsPageContent() {
               <button
                 key={trip.id}
                 onClick={() => router.push(`/trips/${trip.id}`)}
-                className="text-left bg-slate-900/60 border border-slate-800/80 rounded-2xl p-5 hover:border-indigo-500/50 hover:bg-slate-900 transition-all group"
+                className="text-left bg-slate-900/40 backdrop-blur-md border border-slate-700/50 rounded-2xl p-5 hover:border-indigo-400 hover:bg-slate-800/60 hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 group relative"
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-all">
@@ -180,10 +208,28 @@ function TripsPageContent() {
                     {new Date(trip.created_at).toLocaleDateString()}
                   </span>
                 </div>
-                <h3 className="font-semibold text-slate-100 group-hover:text-white">
+                <h3 className="font-semibold text-slate-100 group-hover:text-white text-lg">
                   {trip.destination}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">Open conversation →</p>
+                <div className="flex items-center justify-between mt-2">
+                  <p className="text-xs text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
+                    Open itinerary
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                       <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                    </svg>
+                  </p>
+                  
+                  {/* Delete Button */}
+                  <div
+                    onClick={(e) => handleDeleteTrip(trip.id, e)}
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-500/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                    title="Delete Trip"
+                  >
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </div>
+                </div>
               </button>
             ))}
           </div>

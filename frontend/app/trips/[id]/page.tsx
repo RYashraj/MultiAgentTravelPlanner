@@ -7,35 +7,35 @@ import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getSessionToken, signOut } from "@/lib/supabase";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
-import { LogOut, Send, Terminal, Calendar, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles } from "lucide-react";
+import { LogOut, Send, Terminal, Calendar, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin } from "lucide-react";
 
-// Helper function to parse basic Markdown (headers, lists, bold, inline code)
 function renderMarkdown(content: string) {
   if (!content) return null;
   const lines = content.split("\n");
   
   return (
-    <div className="space-y-2 font-sans">
+    <div className="space-y-3 font-sans w-full">
       {lines.map((line, idx) => {
         // Headers
         if (line.startsWith("### ")) {
           return (
-            <h3 key={idx} className="text-xs font-bold uppercase tracking-wider text-indigo-400 mt-4 mb-2 flex items-center gap-1.5">
+            <h3 key={idx} className="text-[13px] font-bold uppercase tracking-widest text-indigo-300 mt-6 mb-2 flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-indigo-400" />
               {line.substring(4)}
             </h3>
           );
         }
         if (line.startsWith("## ")) {
           return (
-            <h2 key={idx} className="text-sm font-bold text-white mt-5 mb-2 border-b border-slate-800/80 pb-1">
-              {line.substring(3)}
+            <h2 key={idx} className="text-lg font-bold text-white mt-8 mb-3 border-b border-white/10 pb-2">
+              {parseInlineStyle(line.substring(3))}
             </h2>
           );
         }
         if (line.startsWith("# ")) {
           return (
-            <h1 key={idx} className="text-base font-extrabold text-white mt-6 mb-3">
-              {line.substring(2)}
+            <h1 key={idx} className="text-2xl font-extrabold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mt-6 mb-4">
+              {parseInlineStyle(line.substring(2))}
             </h1>
           );
         }
@@ -44,9 +44,9 @@ function renderMarkdown(content: string) {
         if (line.startsWith("- ") || line.startsWith("* ")) {
           const listText = line.substring(2);
           return (
-            <div key={idx} className="flex items-start gap-2 ml-2 my-1">
-              <span className="text-indigo-400 mt-1 select-none font-sans text-xs">•</span>
-              <p className="text-xs text-slate-300 leading-relaxed flex-1">
+            <div key={idx} className="flex items-start gap-3 ml-2 my-1.5 group">
+              <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400/50 group-hover:bg-indigo-400 transition-colors shrink-0" />
+              <p className="text-sm text-slate-300 leading-relaxed flex-1">
                 {parseInlineStyle(listText)}
               </p>
             </div>
@@ -55,12 +55,12 @@ function renderMarkdown(content: string) {
         
         // Blank lines
         if (line.trim() === "") {
-          return <div key={idx} className="h-1.5" />;
+          return <div key={idx} className="h-1" />;
         }
         
         // Regular paragraphs
         return (
-          <p key={idx} className="text-xs text-slate-305 leading-relaxed">
+          <p key={idx} className="text-sm text-slate-300 leading-relaxed">
             {parseInlineStyle(line)}
           </p>
         );
@@ -82,7 +82,7 @@ function parseInlineStyle(text: string) {
     }
     if (part.startsWith("`") && part.endsWith("`")) {
       return (
-        <code key={i} className="bg-slate-950 px-1.5 py-0.5 rounded font-mono text-[10px] text-indigo-300 border border-slate-800">
+        <code key={i} className="bg-white/10 px-1.5 py-0.5 rounded-md font-mono text-xs text-indigo-200 border border-white/5">
           {part.slice(1, -1)}
         </code>
       );
@@ -93,7 +93,8 @@ function parseInlineStyle(text: string) {
 
 type Message = {
   id: string;
-  sender: string;
+  sender?: string;
+  role?: string;
   content: string;
   created_at: string;
   isStreaming?: boolean;
@@ -101,10 +102,8 @@ type Message = {
 
 type Itinerary = {
   id: string;
-  day_number: number;
-  title: string;
-  description: string;
-  activities?: any;
+  content: string;
+  status: string;
 };
 
 type Trip = {
@@ -138,10 +137,15 @@ function ChatPageContent() {
   const fetchItineraries = useCallback(async () => {
     try {
       setItinerariesLoading(true);
-      const data = await apiFetch<Itinerary[]>(`/trips/${tripId}/itineraries`);
-      setItineraries(data);
-    } catch (err) {
-      console.error("Failed to load itineraries:", err);
+      const data = await apiFetch<Itinerary>(`/trips/${tripId}/itineraries`);
+      // Backend returns a single itinerary object
+      setItineraries(data && data.id ? [data] : []);
+    } catch (err: any) {
+      // 404 = no itinerary yet — totally normal, not an error
+      if (err?.status !== 404) {
+        console.error("Failed to load itineraries:", err);
+      }
+      setItineraries([]);
     } finally {
       setItinerariesLoading(false);
     }
@@ -154,14 +158,9 @@ function ChatPageContent() {
     async function loadData() {
       try {
         setIsLoadingHistory(true);
-        // Find destination name by scanning all user trips
-        const tripsData = await apiFetch<Trip[]>("/trips");
-        const currentTrip = tripsData.find((t) => t.id === tripId);
-        if (currentTrip) {
-          if (!cancelled) setTrip(currentTrip);
-        } else {
-          throw new Error("Trip not found or access denied.");
-        }
+        // Fetch the specific trip directly — no need to scan all trips
+        const currentTrip = await apiFetch<Trip>(`/trips/${tripId}`);
+        if (!cancelled) setTrip(currentTrip);
 
         const messagesData = await apiFetch<Message[]>(`/trips/${tripId}/messages`);
         if (!cancelled) setMessages(messagesData);
@@ -197,6 +196,9 @@ function ChatPageContent() {
     setSendError(null);
     setActiveLogs([]);
     setActiveAgent("CoordinatorAgent");
+    
+    // Clean payload — no prompt injection. Location context is handled server-side in Week 5.
+    const apiPayloadText = userText;
 
     // Optimistically add user bubble
     const tempUserMsg: Message = {
@@ -218,7 +220,7 @@ function ChatPageContent() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ content: userText }),
+        body: JSON.stringify({ content: apiPayloadText }),
       });
 
       if (!response.ok) {
@@ -269,44 +271,64 @@ function ChatPageContent() {
             }
           }
 
-          if (eventType && dataStr) {
-            try {
-              const data = JSON.parse(dataStr);
-              if (eventType === "user_message") {
-                // Swap temp user message
-                setMessages((prev) =>
-                  prev.map((msg) => (msg.id.startsWith("local-user-") ? data : msg))
-                );
-              } else if (eventType === "agent_log") {
-                // Record sub-agent logs
-                setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
-                setActiveAgent(data.agent);
-              } else if (eventType === "message_chunk") {
-                // Append chunk
-                tempAssistantContent += data.content;
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? { ...msg, content: tempAssistantContent }
-                      : msg
-                  )
-                );
-              } else if (eventType === "message_complete") {
-                // Finalize assistant message bubble
-                setMessages((prev) =>
-                  prev.map((msg) =>
-                    msg.id === assistantMsgId
-                      ? { id: data.id, sender: "assistant", content: data.content, created_at: data.created_at }
-                      : msg
-                  )
-                );
-                // Refresh itineraries
-                fetchItineraries();
-                setActiveAgent(null);
-              }
-            } catch (pErr) {
-              console.error("Failed to parse SSE payload", pErr);
+          // Skip control-only events (done, error with no data)
+          if (!dataStr || dataStr === "{}") continue;
+
+          try {
+            const data = JSON.parse(dataStr);
+            // Determine event type: prefer explicit SSE event: field,
+            // fall back to the "event" or "type" field inside the JSON body.
+            const resolvedType = eventType || data.event || data.type || "";
+
+            if (resolvedType === "status") {
+              // Graph step progress — optionally log
+            } else if (resolvedType === "token") {
+              tempAssistantContent += data.content || "";
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { ...msg, content: tempAssistantContent }
+                    : msg
+                )
+              );
+            } else if (resolvedType === "result") {
+              // Final result — finalize assistant bubble with confirmed server ID
+              const finalContent = data.content || tempAssistantContent;
+              const finalId = data.message_id || assistantMsgId;
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { id: finalId, sender: "assistant", content: finalContent, created_at: new Date().toISOString() }
+                    : msg
+                )
+              );
+              fetchItineraries();
+              setActiveAgent(null);
+            } else if (resolvedType === "agent_log") {
+              setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
+              setActiveAgent(data.agent);
+            } else if (resolvedType === "message_chunk") {
+              tempAssistantContent += data.content || "";
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { ...msg, content: tempAssistantContent }
+                    : msg
+                )
+              );
+            } else if (resolvedType === "message_complete") {
+              setMessages((prev) =>
+                prev.map((msg) =>
+                  msg.id === assistantMsgId
+                    ? { id: data.id, sender: "assistant", content: data.content || tempAssistantContent, created_at: new Date().toISOString() }
+                    : msg
+                )
+              );
+              fetchItineraries();
+              setActiveAgent(null);
             }
+          } catch (pErr) {
+            console.error("Failed to parse SSE payload", pErr, "raw:", dataStr);
           }
         }
       }
@@ -323,7 +345,7 @@ function ChatPageContent() {
     if (!isSending) {
       return activeLogs.length > 0 ? "completed" : "idle";
     }
-    const agentOrder = ["CoordinatorAgent", "LogisticsAgent", "AccommodationAgent", "ExperienceAgent", "SupervisorAgent"];
+    const agentOrder = ["CoordinatorAgent", "MemoryAgent", "WeatherAgent", "AttractionAgent", "PlannerAgent"];
     const currentIndex = agentOrder.indexOf(activeAgent || "");
     const stepIndex = agentOrder.indexOf(stepAgent);
     if (stepIndex < currentIndex) return "completed";
@@ -333,10 +355,10 @@ function ChatPageContent() {
 
   const steps = [
     { name: "Coordinator", key: "CoordinatorAgent", icon: Terminal },
-    { name: "Logistics", key: "LogisticsAgent", icon: Plane },
-    { name: "Lodging", key: "AccommodationAgent", icon: Home },
-    { name: "Experiences", key: "ExperienceAgent", icon: Activity },
-    { name: "Supervisor", key: "SupervisorAgent", icon: Cpu }
+    { name: "Memory", key: "MemoryAgent", icon: Database },
+    { name: "Weather", key: "WeatherAgent", icon: Cloud },
+    { name: "Attractions", key: "AttractionAgent", icon: MapPin },
+    { name: "Planner", key: "PlannerAgent", icon: Sparkles }
   ];
 
   return (
@@ -403,10 +425,10 @@ function ChatPageContent() {
                         
                         <div className={`w-6 h-6 rounded-lg flex items-center justify-center z-10 transition-all duration-500 border ${
                           status === "completed"
-                            ? "bg-emerald-950/30 border-emerald-500/40 text-emerald-400 shadow-md shadow-emerald-950/20"
+                            ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.3)]"
                             : status === "active"
-                            ? "bg-indigo-500/10 border-indigo-500 text-indigo-400 animate-pulse shadow-lg shadow-indigo-500/20 scale-105"
-                            : "bg-slate-900/60 border-slate-850 text-slate-500"
+                            ? "bg-indigo-500/20 border-indigo-400 text-indigo-300 animate-pulse shadow-[0_0_20px_rgba(99,102,241,0.4)] scale-110"
+                            : "bg-white/5 border-white/10 text-white/40"
                         }`}>
                           <Icon className="w-3 h-3" />
                         </div>
@@ -441,33 +463,44 @@ function ChatPageContent() {
                         </p>
                       </div>
                     ) : (
-                      messages.map((message) => (
-                        <div
-                          key={message.id}
-                          className={`flex ${
-                            message.sender === "user" ? "justify-end" : "justify-start"
-                          }`}
-                        >
+                      messages.map((message) => {
+                        const isUser = (message.sender || message.role) === "user";
+                        return (
                           <div
-                            className={`max-w-[85%] rounded-2xl px-6 py-4 text-[13px] leading-relaxed relative ${
-                              message.sender === "user"
-                                ? "bg-gradient-to-br from-indigo-600 via-purple-600 to-indigo-700 text-white shadow-xl shadow-indigo-500/25 border border-indigo-400/20"
-                                : "bg-slate-800/60 backdrop-blur-md border border-slate-700/50 text-slate-100 shadow-lg shadow-black/20"
+                            key={message.id}
+                            className={`flex w-full ${
+                              isUser ? "justify-end pl-12" : "justify-start pr-12"
                             }`}
                           >
-                            {message.sender === "assistant" && (
-                               <div className="absolute -left-2 top-4 w-1.5 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
-                            )}
-                            {message.sender === "user" ? (
-                              message.content
-                            ) : (
-                              renderMarkdown(message.content)
-                            )}
+                            <div
+                              className={`rounded-3xl px-7 py-5 text-[15px] leading-relaxed relative ${
+                                isUser
+                                  ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 rounded-tr-sm"
+                                  : "bg-white/5 backdrop-blur-xl border border-white/10 text-slate-100 shadow-xl rounded-tl-sm"
+                              }`}
+                            >
+                              {!isUser && (
+                                <div className="absolute -left-[1px] top-6 w-1 h-8 bg-indigo-500 rounded-r-full shadow-[0_0_12px_rgba(99,102,241,0.8)]" />
+                              )}
+                              {isUser ? (
+                                message.content
+                              ) : (
+                                message.isStreaming && !message.content ? (
+                                  <div className="flex items-center space-x-2 h-6 px-2">
+                                    <div className="w-2.5 h-2.5 bg-indigo-400/80 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                                    <div className="w-2.5 h-2.5 bg-indigo-400/80 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                                    <div className="w-2.5 h-2.5 bg-indigo-400/80 rounded-full animate-bounce"></div>
+                                  </div>
+                                ) : (
+                                  renderMarkdown(message.content)
+                                )
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
-                    <div ref={scrollAnchorRef} />
+                    <div ref={scrollAnchorRef} className="h-4" />
                   </div>
               </div>
 
@@ -524,22 +557,14 @@ function ChatPageContent() {
                   itineraries.map((it) => (
                     <div key={it.id} className="bg-slate-800/40 border border-slate-700/50 hover:border-indigo-500/30 rounded-2xl p-5 space-y-3 text-xs transition-all duration-300 hover:shadow-lg hover:shadow-indigo-500/10 group cursor-default">
                       <div className="flex justify-between items-center text-slate-100 font-semibold border-b border-slate-700/50 pb-3">
-                        <span className="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-md border border-indigo-500/20">Day {it.day_number}</span>
-                        <span className="text-[11px] text-slate-300 font-medium group-hover:text-indigo-300 transition-colors">{it.title}</span>
+                        <span className="bg-indigo-500/10 text-indigo-400 px-2 py-1 rounded-md border border-indigo-500/20">📋 Itinerary</span>
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full border font-mono ${it.status === "planning" ? "bg-amber-500/10 border-amber-500/30 text-amber-400" : "bg-emerald-500/10 border-emerald-500/30 text-emerald-400"}`}>
+                          {it.status}
+                        </span>
                       </div>
-                      <div className="text-slate-300 leading-relaxed font-sans text-[12px] group-hover:text-slate-200 transition-colors">
-                        {renderMarkdown(it.description)}
+                      <div className="text-slate-300 leading-relaxed font-sans text-[12px] group-hover:text-slate-200 transition-colors max-h-64 overflow-y-auto pr-1">
+                        {renderMarkdown(it.content)}
                       </div>
-                      
-                      {it.activities && typeof it.activities === "object" && (
-                        <div className="flex flex-wrap gap-1.5 pt-2">
-                          {Object.values(it.activities).flat().map((act: any, idx: number) => (
-                            <span key={idx} className="bg-slate-950 text-indigo-400 border border-slate-850 px-2 py-0.5 rounded text-[9px] font-mono">
-                              {String(act)}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   ))
                 )}

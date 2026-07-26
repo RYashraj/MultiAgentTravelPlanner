@@ -14,6 +14,7 @@ import {
   getUserEmail, 
   signIn, 
   signUp, 
+  signInWithGoogle as supabaseSignInWithGoogle,
   signOut as supabaseSignOut 
 } from "@/lib/supabase";
 
@@ -29,6 +30,7 @@ type AuthContextValue = {
     email: string,
     password?: string
   ) => Promise<{ error: string | null }>;
+  signInWithGoogle: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 };
 
@@ -123,6 +125,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const signInWithGoogle: AuthContextValue["signInWithGoogle"] = async () => {
+    setIsLoading(true);
+    const { error } = await supabaseSignInWithGoogle();
+
+    if (isMockMode && !error) {
+      // supabaseSignInWithGoogle already wrote mock-user token to localStorage.
+      // Re-read it here so the context state stays in sync.
+      const token = getSessionToken();
+      const email = getUserEmail();
+      if (token && email) {
+        setSession({ access_token: token });
+        setUser({ email, id: token });
+      }
+    }
+
+    setIsLoading(false);
+    return { error: error?.message ?? null };
+  };
+
   const signOut = async () => {
     setIsLoading(true);
     await supabaseSignOut();
@@ -139,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isLoading,
         signInWithPassword,
         signUpWithPassword,
+        signInWithGoogle,
         signOut,
       }}
     >

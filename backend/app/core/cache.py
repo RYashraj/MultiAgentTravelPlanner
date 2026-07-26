@@ -1,11 +1,12 @@
 """Best-effort Redis cache for authenticated user session identity.
 
 JWT validation remains the source of truth. Redis makes repeated session lookups
-available to later agent features without making the Week 3 MVP depend on Redis.
+fast for agent features without making the MVP depend on Redis being available.
 """
+import hashlib
 import json
 import logging
-from functools import lru_cache
+from functools import lru_cache, wraps
 
 import redis
 
@@ -38,3 +39,41 @@ class RedisSessionCache:
 @lru_cache
 def get_session_cache() -> RedisSessionCache:
     return RedisSessionCache()
+
+
+def with_redis_cache(ttl_seconds: int = 3600, key_prefix: str = "cache"):
+    """
+    Decorator that caches function output in Redis using the shared singleton client.
+    Fails open (calls original function) if Redis is unreachable.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = ""
+            client = None
+            try:
+                key_args = f"{args}-{kwargs}".encode("utf-8")
+                key_hash = hashlib.md5(key_args).hexdigest()
+                cache_key = f"voyagerai:{key_prefix}:{func.__name__}:{key_hash}"
+                client = get_session_cache().client
+                cached = client.get(cache_key)
+                if cached:
+                    return json.loads(str(cached))
+            except redis.RedisError as exc:
+                logger.warning("Redis unavailable for cache read (%s): %s", func.__name__, exc)
+            except Exception as exc:
+                logger.warning("Error reading from cache (%s): %s", func.__name__, exc)
+
+            result = func(*args, **kwargs)
+
+            if client is not None and cache_key:
+                try:
+                    client.setex(cache_key, ttl_seconds, json.dumps(result))
+                except redis.RedisError as exc:
+                    logger.warning("Redis unavailable for cache write (%s): %s", func.__name__, exc)
+                except Exception as exc:
+                    logger.warning("Error writing to cache (%s): %s", func.__name__, exc)
+
+            return result
+        return wrapper
+    return decorator

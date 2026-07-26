@@ -102,6 +102,30 @@ export async function signUp(email: string, password?: string): Promise<{ data: 
 }
 
 /**
+ * Sign in with Google (OAuth)
+ */
+export async function signInWithGoogle(): Promise<{ error: any }> {
+  if (isMockMode) {
+    // Mock Google Auth logic
+    const email = "googleuser@gmail.com";
+    const mockToken = `mock-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    // In a real app this would redirect. We'll just return success so AuthContext handles it.
+    return { error: null };
+  }
+
+  // Real Supabase Auth logic
+  if (!supabase) return { error: new Error("Supabase client not initialized") };
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+  });
+
+  return { error };
+}
+
+/**
  * Sign out of current session (Mock or Real)
  */
 export async function signOut(): Promise<{ error: any }> {

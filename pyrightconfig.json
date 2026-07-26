@@ -3,5 +3,10 @@
   "venv": "venv",
   "extraPaths": [
     "backend"
-  ]
+  ],
+  "exclude": [
+    "MultiAgentTravelPlanner-main",
+    "MultiAgentTravelPlanner-main.zip"
+  ],
+  "typeCheckingMode": "basic"
 }
