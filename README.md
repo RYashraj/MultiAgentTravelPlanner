@@ -6,59 +6,18 @@
 
 ## 🚦 Current Status
 
-| Area | Status |
-|---|---|
-| Backend API (FastAPI + SQLAlchemy) | ✅ Complete |
-| Auth (Supabase JWT + mock bypass) | ✅ Complete |
-| LangGraph Agent Graph (Coordinator + Supervisor) | ✅ Complete |
-| Gemini LLM Planner Agent | ✅ Complete |
-| Weather Tool (OpenWeather API) | ✅ Integrated |
-| Places Tool (Google Places API) | ✅ Integrated |
-| ChromaDB RAG Memory | ✅ Integrated |
-| SSE Streaming Chat UI | ✅ Complete |
-| Frontend (Next.js Trips Workspace) | ✅ Complete |
-| CI (GitHub Actions) | ✅ Passing |
-| Production deployment | 🔲 Not started |
-
----
-
-## 🤖 Agent Architecture
-
-```
-User Request
-     │
-     ▼
-┌──────────────────────────────────────────┐
-│          Supervisor Agent                │
-│  (LangGraph StateGraph orchestrator)     │
-│  - Parses user message                   │
-│  - Routes to Coordinator graph           │
-│  - Streams response via SSE              │
-└───────────────┬──────────────────────────┘
-                │
-                ▼
-┌──────────────────────────────────────────┐
-│         Coordinator Agent                │
-│  (LangGraph StateGraph)                  │
-│  - Manages agent state                   │
-│  - Delegates to Planner Agent            │
-└───────────────┬──────────────────────────┘
-                │
-                ▼
-┌──────────────────────────────────────────┐
-│          Planner Agent                   │
-│  (Gemini 1.5 Pro LLM)                    │
-│  - Calls Weather Tool → OpenWeather API  │
-│  - Calls Places Tool → Google Places API │
-│  - Reads ChromaDB for past trip context  │
-│  - Generates structured itinerary        │
-└──────────────────────────────────────────┘
-                │
-                ▼
-         Parser Agent
-     (Structured output extraction
-      → JSON itinerary response)
-```
+| Area | Status | Notes |
+|---|---|---|
+| **Backend API (FastAPI + SQLAlchemy)** | ✅ Done | Comprehensive CRUD endpoints for trips, chat messages, itineraries, and agent runs. |
+| **Auth (Supabase JWT + Dev Bypass)** | ✅ Done | Supports production Supabase JWKS (ES256/RS256/HS256) and fallback dev auth token mode. |
+| **LangGraph Coordinator & Supervisor** | ✅ Done | Robust StateGraph orchestration with type-safe message passing and error recovery. |
+| **Gemini Planner Agent** | ✅ Done | Integrated with Google Gemini 3.5 Flash (`gemini-3.5-flash`) for constraint-aware planning. |
+| **External Tool Integrations** | ✅ Done | Real-time OpenWeather API and Google Places API tool calling. |
+| **ChromaDB RAG Memory** | ✅ Done | Vector database retrieval for personalized historical trip preferences. |
+| **SSE Streaming Chat UI** | ✅ Done | Server-Sent Events real-time response streaming to frontend chat. |
+| **Frontend Next.js Workspace** | ✅ Done | Full authentication flow, trips dashboard, and interactive trip workspace. |
+| **CI / Automated Tests** | ✅ Done | Automated GitHub Actions CI pipeline with backend unit & integration tests. |
+| **Production Deployment** | 🔲 In Progress | Containerized with Docker Compose; cloud deployment targets next. |
 
 ---
 
@@ -66,21 +25,194 @@ User Request
 
 | Layer | Technology |
 |---|---|
-| **Backend** | Python 3.12, FastAPI, SQLAlchemy, Alembic |
-| **LLM / Agents** | Google Gemini 1.5 Pro, LangGraph (StateGraph) |
-| **Memory / RAG** | ChromaDB (local vector store) |
-| **External Tools** | OpenWeather API, Google Places API |
-| **Database** | SQLite (local dev) / PostgreSQL via Supabase |
-| **Auth** | Supabase Auth (JWKS ES256/RS256 + HS256) + mock bypass |
-| **Cache** | Redis (session cache with DB fallback) |
-| **Frontend** | Next.js 14 App Router, TypeScript, Tailwind CSS |
-| **Streaming** | Server-Sent Events (SSE) |
-| **CI** | GitHub Actions |
-| **Containers** | Docker + docker-compose |
+| **Backend Framework** | Python 3.12, FastAPI, SQLAlchemy ORM, Alembic |
+| **AI / Agent Engine** | Google Gemini 3.5 Flash (`gemini-3.5-flash`), LangGraph (`StateGraph`), Pydantic SecretStr |
+| **Vector Store / RAG** | ChromaDB (local embedded vector database) |
+| **External API Tools** | OpenWeather API, Google Places API |
+| **Database** | SQLite (local dev) / PostgreSQL (production via Supabase) |
+| **Authentication** | Supabase Auth (JWT ES256/RS256/HS256 verification) + Mock Auth Bypass |
+| **Caching** | Redis session cache with automatic database fallback |
+| **Frontend Application** | Next.js 14 (App Router), TypeScript, Tailwind CSS |
+| **Streaming Protocol** | Server-Sent Events (SSE) `/api/v1/trips/{id}/messages?stream=true` |
+| **DevOps & CI/CD** | GitHub Actions CI, Docker, Docker Compose |
 
 ---
 
-## 👥 Team
+## 📦 Setup & Installation Instructions
+
+### Prerequisites
+- **Python 3.12+**
+- **Node.js 18+** & **npm**
+- **Git**
+- *(Optional)* **Docker & Docker Compose** for containerized quick-start
+- *(Optional)* **Redis** (if running locally without Docker; falls back to in-memory if unavailable)
+
+### 1. Clone & Configure Environment Variables
+```bash
+git clone https://github.com/RYashraj/MultiAgentTravelPlanner.git
+cd MultiAgentTravelPlanner
+
+# Backend environment setup
+cp backend/.env.example backend/.env
+
+# Frontend environment setup
+cp frontend/.env.local.example frontend/.env.local
+```
+
+#### Required Backend Environment Variables (`backend/.env`)
+| Variable | Description | Example / Note |
+|---|---|---|
+| `GEMINI_API_KEY` | Google Gemini API Key | Required for AI Planner Agent |
+| `OPENWEATHER_API_KEY` | OpenWeatherMap API Key | Required for weather forecasts |
+| `GOOGLE_PLACES_API_KEY` | Google Places API Key | Required for place recommendations |
+| `DATABASE_URL` | SQLAlchemy Database URL | Defaults to `sqlite:///./travel.db` |
+| `SUPABASE_URL` | Supabase Project URL | Optional — leave empty for local Mock Auth |
+| `SUPABASE_ANON_KEY` | Supabase Public Anon Key | Optional — leave empty for local Mock Auth |
+| `SUPABASE_JWT_SECRET` | Supabase JWT Secret | Optional — leave empty for local Mock Auth |
+
+---
+
+## 🚀 How to Run Locally
+
+### Option A: Quick Start with Docker Compose (Recommended)
+```bash
+docker-compose up --build
+```
+- **Backend API & Swagger Docs:** http://localhost:8000/docs  
+- **Frontend Workspace:** http://localhost:3000  
+
+---
+
+### Option B: Manual Local Development
+
+#### 1. Start Backend Dev Server
+```bash
+cd backend
+
+# Create and activate Python virtual environment
+python -m venv venv
+
+# Windows (Command Prompt):
+venv\Scripts\activate.bat
+# Windows (PowerShell):
+.\venv\Scripts\Activate.ps1
+# macOS / Linux:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run database migrations
+alembic upgrade head
+
+# Launch FastAPI server with hot-reload
+uvicorn app.main:app --reload --port 8000
+```
+- API server will be live at http://localhost:8000.
+
+#### 2. Start Frontend Dev Server
+```bash
+cd frontend
+
+# Install Node dependencies
+npm install
+
+# Launch Next.js development server
+npm run dev
+```
+- Open http://localhost:3000 in your browser.
+
+---
+
+## 📁 Folder & Architecture Overview
+
+### Project Directory Layout
+```
+MultiAgentTravelPlanner/
+├── backend/
+│   ├── app/
+│   │   ├── agents/              # LangGraph Multi-Agent System
+│   │   │   ├── coordinator.py   # StateGraph coordinating sub-agents
+│   │   │   ├── supervisor.py    # Top-level orchestrator & SSE streaming
+│   │   │   ├── planner.py       # Gemini 3.5 Flash planning engine
+│   │   │   ├── parser.py        # Structured itinerary JSON extractor
+│   │   │   └── state.py         # Shared AgentState TypedDict
+│   │   ├── api/v1/              # FastAPI REST & SSE routes (/trips, /auth)
+│   │   ├── core/                # JWT Auth middleware, security, cache
+│   │   ├── db/                  # SQLAlchemy ORM models & session factory
+│   │   ├── rag/                 # ChromaDB vector store for trip history
+│   │   ├── repositories/        # Database access layer (CRUD)
+│   │   ├── schemas/             # Pydantic validation schemas
+│   │   ├── tools/               # Weather & Places API external wrappers
+│   │   └── main.py              # Application lifecycle & middleware
+│   ├── migrations/              # Alembic database migrations
+│   ├── tests/                   # Complete pytest unit & integration suite
+│   └── requirements.txt
+├── frontend/
+│   ├── app/                     # Next.js 14 App Router
+│   │   ├── (auth)/              # Login and signup pages
+│   │   ├── auth/callback/       # Supabase OAuth callback route
+│   │   ├── trips/               # Trip listing dashboard
+│   │   └── trips/[id]/          # Collaborative trip chat & itinerary view
+│   ├── components/              # Reusable UI components & AuthGuard
+│   ├── contexts/                # AuthContext provider (Supabase + dev bypass)
+│   └── lib/                     # API client & Supabase utility wrapper
+├── .github/workflows/ci.yml     # Automated CI pipeline
+├── docker-compose.yml           # Container orchestration
+└── README.md
+```
+
+### Multi-Agent Architecture
+```
+User Message / Query
+        │
+        ▼
+┌────────────────────────────────────────────────────────┐
+│                   Supervisor Agent                     │
+│        (LangGraph Orchestrator & SSE Gateway)          │
+│  • Validates & parses user input                       │
+│  • Coordinates sub-agent execution flow                │
+│  • Streamlines real-time SSE output back to client     │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                  Coordinator Agent                     │
+│     (StateGraph Routing & Task Delegation Layer)       │
+│  • Manages shared AgentState across agent turns        │
+│  • Delegates itinerary generation to Planner Agent     │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                    Planner Agent                       │
+│              (Google Gemini 3.5 Flash)                 │
+│  • Calls OpenWeather API for real-time weather alerts  │
+│  • Calls Google Places API for venue recommendations   │
+│  • Retrieves ChromaDB RAG memory for user preferences  │
+└──────────────────────────┬─────────────────────────────┘
+                           │
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│                     Parser Agent                       │
+│      (Structured JSON Itinerary Output Formatter)      │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🔮 Roadmap — What's Next
+
+- [ ] **Cloud Production Deployment** — Deploy backend to Railway/Render and frontend to Vercel with managed PostgreSQL.
+- [ ] **Real-Time Collaborative Editing** — Add WebSockets for multi-user simultaneous trip planning.
+- [ ] **Flight & Hotel Booking Integrations** — Integrate Amadeus or Skyscanner APIs for real-time ticket pricing.
+- [ ] **Export to PDF & Calendar** — One-click downloadable itinerary PDFs and `.ics` calendar sync.
+- [ ] **Managed Vector Database** — Transition ChromaDB to Pinecone / pgvector for cloud-scale RAG.
+- [ ] **Budget & Route Optimizer** — Autonomous sub-agent to optimize travel paths and stay within specified cost ceilings.
+
+---
+
+## 👥 Contributors
 
 | Member | Role |
 |---|---|
@@ -91,163 +223,4 @@ User Request
 
 ---
 
-## 🚀 Local Setup & Installation
-
-### Prerequisites
-- Python 3.12+
-- Node.js 18+
-- Redis (running locally or via Docker)
-- A Supabase project (or use SQLite + mock auth for local dev without Supabase)
-
-### Option A — Quick start with Docker
-
-```bash
-docker-compose up --build
-```
-
-Backend → http://localhost:8000  
-Frontend → http://localhost:3000
-
-### Option B — Run manually
-
-**1. Backend**
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Copy and fill in env vars
-cp .env.example .env
-# Edit .env: add GEMINI_API_KEY, OPENWEATHER_API_KEY, GOOGLE_PLACES_API_KEY
-# For Supabase: add SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_JWT_SECRET
-# For local-only dev without Supabase: leave Supabase vars empty (mock auth activates)
-
-# Apply database migrations
-alembic upgrade head
-
-# Start dev server
-uvicorn app.main:app --reload --port 8000
-```
-
-**2. Frontend**
-
-```bash
-cd frontend
-
-npm install
-
-# Copy and fill in env vars
-cp .env.local.example .env.local
-# Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY
-# Leave empty to use Mock Auth bypass mode (no Supabase needed)
-
-npm run dev
-```
-
-Frontend → http://localhost:3000
-
----
-
-## 🧪 Running Tests
-
-```bash
-# Backend unit + integration tests
-cd backend
-venv\Scripts\python -m pytest -v
-
-# Frontend production build check
-cd frontend
-npm run build
-```
-
----
-
-## 📁 Project Structure
-
-```
-MultiAgentTravelPlanner/
-├── backend/
-│   ├── app/
-│   │   ├── agents/
-│   │   │   ├── coordinator.py   # LangGraph StateGraph — top-level agent graph
-│   │   │   ├── supervisor.py    # Orchestrator: parses input, invokes graph, streams SSE
-│   │   │   ├── planner.py       # Gemini LLM planner — calls weather + places tools
-│   │   │   ├── parser.py        # Structured itinerary extraction from LLM output
-│   │   │   └── state.py         # AgentState TypedDict shared across all agents
-│   │   ├── api/v1/
-│   │   │   ├── trips.py         # Trip CRUD + /stream SSE endpoint
-│   │   │   ├── auth.py          # Auth routes
-│   │   │   └── health.py        # Health check
-│   │   ├── core/
-│   │   │   ├── security.py      # Supabase JWT verification
-│   │   │   ├── cache.py         # Redis session cache
-│   │   │   └── auth_middleware.py
-│   │   ├── db/
-│   │   │   ├── models.py        # SQLAlchemy ORM models
-│   │   │   └── session.py       # DB engine + session factory
-│   │   ├── repositories/        # Users, Trips, Messages, Itineraries, AgentRuns
-│   │   ├── schemas/             # Pydantic request/response models
-│   │   ├── tools/
-│   │   │   ├── weather_tool.py  # OpenWeather API wrapper
-│   │   │   └── places_tool.py   # Google Places API wrapper
-│   │   ├── rag/
-│   │   │   └── chroma_store.py  # ChromaDB vector store (trip memory/RAG)
-│   │   └── main.py              # FastAPI app factory + lifespan
-│   ├── migrations/              # Alembic migrations
-│   ├── tests/                   # Pytest test suite
-│   └── requirements.txt
-├── frontend/
-│   ├── app/
-│   │   ├── (auth)/              # Login + Signup pages
-│   │   ├── trips/               # Trip listing page
-│   │   └── trips/[id]/          # Trip workspace (chat + itinerary viewer)
-│   ├── components/              # AuthGuard, Navbar
-│   ├── contexts/                # AuthContext (Supabase + mock)
-│   └── lib/
-│       ├── api.ts               # Backend API client
-│       └── supabase.ts          # Supabase client wrapper
-├── .github/workflows/ci.yml     # GitHub Actions CI
-├── docker-compose.yml
-├── .gitignore
-└── README.md
-```
-
----
-
-## 🔮 Roadmap — What's Next
-
-- [ ] **Production deployment** — Deploy backend to Railway/Render, frontend to Vercel
-- [ ] **Real-time collaboration** — Multi-user trip editing via WebSockets
-- [ ] **Flight & Hotel search** — Integrate Amadeus or Skyscanner API
-- [ ] **PDF export** — Generate downloadable itinerary PDFs
-- [ ] **Persistent RAG** — Move ChromaDB to a hosted vector DB (e.g. Pinecone)
-- [ ] **Budget optimizer** — Agent that automatically optimizes within a given budget
-- [ ] **Mobile app** — React Native wrapper for iOS/Android
-
----
-
-## ⚠️ Environment Variables
-
-Create `backend/.env` from `backend/.env.example`:
-
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | ✅ Yes | Google Gemini API key |
-| `OPENWEATHER_API_KEY` | ✅ Yes | OpenWeather API key |
-| `GOOGLE_PLACES_API_KEY` | ✅ Yes | Google Places API key |
-| `SUPABASE_URL` | Optional | Supabase project URL (leave empty for SQLite + mock auth) |
-| `SUPABASE_ANON_KEY` | Optional | Supabase public anon key |
-| `SUPABASE_JWT_SECRET` | Optional | Supabase JWT signing secret |
-| `REDIS_URL` | Optional | Redis connection URL (defaults to `redis://localhost:6379`) |
-| `DATABASE_URL` | Optional | DB URL (defaults to SQLite `travel.db`) |
-
-> **Never commit `.env` files.** They are gitignored. Rotate any keys that were exposed.
+*Built with ❤️ by the VoyagerAI Team.*
