@@ -29,6 +29,7 @@ from app.tools.places_tool import (
     search_places,
 )
 from app.tools.weather_tool import get_weather
+from app.tools.amadeus_tool import search_flights, search_hotels
 
 logger = logging.getLogger(__name__)
 
@@ -141,7 +142,7 @@ def merge_node(state: AgentState) -> dict[str, Any]:
                 max_retries=1,
                 timeout=30,
             )
-            llm_with_tools = llm.bind_tools([get_weather, search_places])  # type: ignore[arg-type]
+            llm_with_tools = llm.bind_tools([get_weather, search_places, search_flights, search_hotels])  # type: ignore[arg-type]
 
             coordinator_context = ""
             if research_info:
@@ -210,6 +211,10 @@ Now call the tools first, then write the itinerary following ALL rules above."""
                         tool_res = get_weather.invoke(tc["args"])
                     elif tc["name"] == "search_places":
                         tool_res = search_places.invoke(tc["args"])
+                    elif tc["name"] == "search_flights":
+                        tool_res = search_flights.invoke(tc["args"])
+                    elif tc["name"] == "search_hotels":
+                        tool_res = search_hotels.invoke(tc["args"])
                     else:
                         tool_res = "Unknown tool"
                     messages.append(ToolMessage(content=str(tool_res), tool_call_id=tc["id"], name=tc["name"]))

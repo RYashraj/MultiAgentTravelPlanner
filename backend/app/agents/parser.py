@@ -19,6 +19,21 @@ logger = logging.getLogger(__name__)
 # Heuristic fallback
 # ---------------------------------------------------------------------------
 
+def extract_clean_destination(destination: str) -> str:
+    """If the destination is a long prompt, extract the target city/region."""
+    if not destination:
+        return ""
+    if len(destination.split()) > 4:
+        # Match pattern "to <City>"
+        m = re.search(
+            r'\bto\s+([A-Za-z][a-zA-Z\s\-]{1,20}?)(?:\s+from\b|\s+for\b|\s+departing\b|\s+with\b|\s+next\b|,|\.|$)',
+            destination,
+            re.IGNORECASE
+        )
+        if m:
+            return m.group(1).strip().title()
+    return destination
+
 def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
     """Regex/keyword fallback when Gemini is unavailable."""
     parts: list[str] = []
@@ -39,8 +54,8 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
                 r'^(?:i am |i\'m )?(?:from|traveling from|travelling from|departing from|leaving from|coming from)\s+',
                 '', content.lower(), flags=re.IGNORECASE
             ).strip().title()
-            # Accept as standalone origin reply if it's short (1-3 words) and not a full sentence
-            if stripped and len(content.split()) <= 5 and stripped not in ("Here", "Home", "There", "The", "A"):
+            # Accept as standalone origin reply if it's short (1-3 words) and not a full sentence (and doesn't contain digits)
+            if stripped and len(content.split()) <= 5 and stripped not in ("Here", "Home", "There", "The", "A") and not any(char.isdigit() for char in stripped):
                 if not origin:
                     origin = stripped
 
@@ -93,6 +108,19 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
         if m:
             budget = f"₹{m.group(1)}"
 
+    # Support standalone number check in user replies for budget
+    if not budget:
+        for msg in reversed(messages):
+            m_role = getattr(msg, "role", None) or (msg.get("role") if isinstance(msg, dict) else None)
+            m_content = getattr(msg, "content", None) or (msg.get("content") if isinstance(msg, dict) else None)
+            if m_role == "user" and m_content:
+                m_num = re.match(r'^\s*(\d[\d,]*)\s*$', m_content)
+                if m_num:
+                    val = int(m_num.group(1).replace(",", ""))
+                    if val >= 100:  # Avoid matching short numbers like duration
+                        budget = f"₹{val}"
+                        break
+
     # Duration — handle ranges like '7 to 10 days', '7-10 days'
     duration_days = None
     # Range: '7 to 10 days' → take average
@@ -103,7 +131,7 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
         except ValueError:
             pass
     if not duration_days:
-        m = re.search(r'(\d+)\s*(?:day|night)s?', text)
+        m = re.search(r'(\d+)\s*[-]?\s*(?:day|night)s?', text)
         if m:
             try:
                 duration_days = int(m.group(1))
@@ -202,8 +230,9 @@ async def parse_travel_state(messages: list[Any], destination: str) -> dict[str,
             history_lines.append(f"{sender}: {content}")
     chat_history_text = "\n".join(history_lines)
 
+    destination_clean = extract_clean_destination(destination)
     # Always try heuristics first — zero API calls, instant result
-    heuristic = heuristic_parse(messages, destination)
+    heuristic = heuristic_parse(messages, destination_clean)
     
     # If heuristics found any of the core params, trust it (no Gemini call — saves rate limits)
     heuristic_score = sum([
@@ -250,7 +279,7 @@ async def parse_travel_state(messages: list[Any], destination: str) -> dict[str,
                     parsed = json.loads(text_out)
                     return {
                         "origin": parsed.get("origin") or heuristic.get("origin"),
-                        "destination": parsed.get("destination") or destination,
+                        "destination": parsed.get("destination") or destination_clean,
                         "budget": parsed.get("budget") or heuristic.get("budget"),
                         "duration_days": parsed.get("duration_days") or heuristic.get("duration_days"),
                         "dates": parsed.get("dates") or heuristic.get("dates"),

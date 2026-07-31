@@ -130,7 +130,23 @@ def get_transport_info(origin: str, destination: str) -> str:
                 f"**🚌 Bus**: {data['bus']}\n"
             )
 
-    # Generic fallback
+    # Check if either origin or destination is international
+    international_destinations = {
+        "paris", "tokyo", "london", "berlin", "new york", "nyc",
+        "par", "tyo", "lon", "ber", "lhr", "cdg", "nrt", "hnd"
+    }
+    is_origin_intl = any(loc in origin_lower for loc in international_destinations)
+    is_dest_intl = any(loc in dest_lower for loc in international_destinations)
+
+    if is_origin_intl or is_dest_intl:
+        # International route -> Flights only!
+        return (
+            f"## ✈️ Getting to {destination}\n\n"
+            f"**✈️ Flight**: Check Google Flights, Amadeus, or MakeMyTrip for {origin} → {destination} flights. "
+            f"Since this is an international route, booking 4–8 weeks in advance is highly recommended to secure the best fares.\n"
+        )
+
+    # Generic domestic fallback
     return (
         f"## 🚆 Getting to {destination}\n\n"
         f"**✈️ Flight**: Check Google Flights or MakeMyTrip for {origin} → {destination} routes. "

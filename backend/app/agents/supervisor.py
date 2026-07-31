@@ -15,6 +15,7 @@ Responsibilities:
   5. Stream SSE events throughout
   6. Write Message, Itinerary, AgentRun to the database
 """
+import anyio
 import asyncio
 import logging
 import uuid
@@ -26,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.agents.coordinator import coordinator_graph
-from app.agents.parser import parse_travel_state
+from app.agents.parser import parse_travel_state, extract_clean_destination
 from app.agents.planner import planner_graph
 from app.agents.state import AgentState
 from app.core.config import get_settings
@@ -73,7 +74,7 @@ class SupervisorAgent:
             yield {"event": "error", "content": "Trip not found"}
             return
 
-        destination = trip.destination
+        destination = extract_clean_destination(trip.destination)
 
         # Start an agent run record
         agent_run = runs_repo.start(trip_id, {"user_query": user_query})
@@ -166,10 +167,10 @@ class SupervisorAgent:
             f"All parameters collected — Destination: {destination}, Budget: {budget}, "
             f"Duration: {duration_days} days, Dates: {dates or 'flexible'}. Launching agents.",
         )
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
 
         yield emit_log("MemoryAgent", f"Retrieving past conversation context for {destination}…")
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
 
         # --- Step 1: Run coordinator graph (local context building, no Gemini) ---
         yield emit_log("CoordinatorGraph", "Building trip context and research data…")
@@ -181,10 +182,10 @@ class SupervisorAgent:
             coord_output = {}
 
         yield emit_log("WeatherAgent", f"Fetching weather and climate data for {destination}…")
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
 
         yield emit_log("AttractionAgent", f"Searching top-rated spots and local experiences in {destination}…")
-        await asyncio.sleep(0.1)
+        await anyio.sleep(0.1)
 
         yield emit_log("PlannerAgent", f"Synthesising final {duration_days}-day itinerary…")
 
@@ -400,7 +401,7 @@ class SupervisorAgent:
         for i, word in enumerate(words):
             chunk = (word + " ") if i < len(words) - 1 else word
             yield {"event": "token", "content": chunk}
-            await asyncio.sleep(0.005)
+            await anyio.sleep(0.005)
 
         yield {
             "event": "result",

@@ -1,5 +1,6 @@
 """Tools package for Travel Planner agents."""
 from app.tools.places_tool import search_places
 from app.tools.weather_tool import get_weather
+from app.tools.amadeus_tool import search_flights, search_hotels
 
-__all__ = ["get_weather", "search_places"]
+__all__ = ["get_weather", "search_places", "search_flights", "search_hotels"]
