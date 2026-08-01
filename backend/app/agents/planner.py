@@ -136,7 +136,7 @@ def merge_node(state: AgentState) -> dict[str, Any]:
     if api_key:
         try:
             llm = ChatGoogleGenerativeAI(
-                model="gemini-3.5-flash",
+                model="gemini-2.0-flash",
                 api_key=SecretStr(api_key),
                 max_retries=1,
                 timeout=30,
