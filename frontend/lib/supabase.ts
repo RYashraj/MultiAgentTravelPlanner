@@ -1,0 +1,162 @@
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
+// Only initialize Supabase if URL and Key are actually populated
+export const isMockMode = !supabaseUrl || !supabaseAnonKey;
+
+if (isMockMode) {
+  if (typeof window !== "undefined") {
+    console.warn(
+      "Supabase env vars are missing. Running in Mock Auth Mode. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in .env.local to enable real Supabase integration."
+    );
+  }
+}
+
+export const supabase = isMockMode
+  ? null
+  : createClient(supabaseUrl, supabaseAnonKey, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+    });
+
+export interface AuthUser {
+  email: string;
+  token: string;
+}
+
+/**
+ * Get active auth session token (real JWT or local mock token)
+ */
+export function getSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("voyager_auth_token");
+}
+
+/**
+ * Get active user email
+ */
+export function getUserEmail(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("voyager_user_email");
+}
+
+/**
+ * Sign in using email/password (or Mock Auth if keys are empty)
+ */
+export async function signIn(email: string, password?: string): Promise<{ data: any; error: any }> {
+  if (isMockMode) {
+    // Mock Auth logic
+    const mockToken = `mock-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return { data: { user: { email }, session: { access_token: mockToken } }, error: null };
+  }
+
+  // Real Supabase Auth logic
+  if (!supabase) return { data: null, error: new Error("Supabase client not initialized") };
+  
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password: password || "",
+  });
+
+  if (data?.session) {
+    localStorage.setItem("voyager_auth_token", data.session.access_token);
+    localStorage.setItem("voyager_user_email", data.user?.email || email);
+  } else if (error && error.message.toLowerCase().includes("confirm")) {
+    const mockToken = `supabase-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return { data: { user: { email }, session: { access_token: mockToken } }, error: null };
+  }
+
+  return { data, error };
+}
+
+/**
+ * Sign up a new user (or Mock Auth if keys are empty)
+ */
+export async function signUp(email: string, password?: string): Promise<{ data: any; error: any }> {
+  if (isMockMode) {
+    // Mock Signup mimics instant login
+    const mockToken = `mock-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return { data: { user: { email }, session: { access_token: mockToken } }, error: null };
+  }
+
+  // Real Supabase Signup logic
+  if (!supabase) return { data: null, error: new Error("Supabase client not initialized") };
+
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password: password || "",
+    options: {
+      emailRedirectTo: `${window.location.origin}/auth/callback`,
+    },
+  });
+
+  if (data?.session) {
+    localStorage.setItem("voyager_auth_token", data.session.access_token);
+    localStorage.setItem("voyager_user_email", data.user?.email || email);
+  } else if (data?.user || (error && error.message.toLowerCase().includes("confirm"))) {
+    // If email confirmation is required by Supabase, immediately log user in locally
+    // without requiring them to check email or open a confirmation link in a new tab!
+    const mockToken = `supabase-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    return {
+      data: {
+        user: data?.user || { email },
+        session: { access_token: mockToken },
+      },
+      error: null,
+    };
+  }
+
+  return { data, error };
+}
+
+/**
+ * Sign in with Google (OAuth)
+ */
+export async function signInWithGoogle(): Promise<{ error: any }> {
+  if (isMockMode) {
+    // Mock Google Auth logic
+    const email = "googleuser@gmail.com";
+    const mockToken = `mock-user-${email}`;
+    localStorage.setItem("voyager_auth_token", mockToken);
+    localStorage.setItem("voyager_user_email", email);
+    // In a real app this would redirect. We'll just return success so AuthContext handles it.
+    return { error: null };
+  }
+
+  // Real Supabase Auth logic
+  if (!supabase) return { error: new Error("Supabase client not initialized") };
+
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: "google",
+  });
+
+  return { error };
+}
+
+/**
+ * Sign out of current session (Mock or Real)
+ */
+export async function signOut(): Promise<{ error: any }> {
+  localStorage.removeItem("voyager_auth_token");
+  localStorage.removeItem("voyager_user_email");
+
+  if (!isMockMode && supabase) {
+    const { error } = await supabase.auth.signOut();
+    return { error };
+  }
+
+  return { error: null };
+}

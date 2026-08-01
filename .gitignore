@@ -1,0 +1,64 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+*.db
+*.sqlite3
+
+# Env files
+.env
+.env.local
+*.env.*
+!.env.example
+!.env.local.example
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Test artifacts
+.coverage
+.pytest_cache/
+htmlcov/
+coverage.xml
+
+# Scratch / dev-only test scripts (not part of test suite)
+backend/test_*.py
+
+# Backend static offline assets
+backend/app/static/
+
+# ChromaDB binary vector store data (runtime artifact, not source)
+backend/chroma_data/
+
+# Stale / one-off files
+keysiguess.txt
+requirements_week3.txt
+project_timeline.txt
+
+# Teammate zip extraction
+MultiAgentTravelPlanner-main.zip
+MultiAgentTravelPlanner-main/
+
+# Root-level orphan lock file (no Node project at repo root)
+/package-lock.json
+
+# Type checkers / Linters / Cache
+.mypy_cache/
+.ruff_cache/
+
+# Logs and temp files
+*.log
+*.tmp
