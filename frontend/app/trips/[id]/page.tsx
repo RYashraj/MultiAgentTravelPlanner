@@ -7,7 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getSessionToken, signOut } from "@/lib/supabase";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
-import { LogOut, Send, Terminal, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin } from "lucide-react";
+import { LogOut, Send, Terminal, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin, LayoutDashboard, Hotel } from "lucide-react";
 
 function renderMarkdown(content: string) {
   if (!content) return null;
@@ -121,8 +121,9 @@ function ChatPageContent() {
   const [inputMessage, setInputMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [activeLogs, setActiveLogs] = useState<string[]>([]);
-  const [sendError, setSendError] = useState<string | null>(null);
   const [activeAgent, setActiveAgent] = useState<string | null>(null);
+  const [sendError, setSendError] = useState<string | null>(null);
+  const [itineraryGenerated, setItineraryGenerated] = useState(false);
 
 
   const scrollAnchorRef = useRef<HTMLDivElement>(null);
@@ -278,6 +279,10 @@ function ChatPageContent() {
                     : msg
                 )
               );
+              // Mark itinerary as generated so the dashboard button appears
+              if (finalContent && finalContent.length > 100) {
+                setItineraryGenerated(true);
+              }
               setActiveAgent(null);
             } else if (resolvedType === "agent_log") {
               setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
@@ -319,7 +324,7 @@ function ChatPageContent() {
     if (!isSending) {
       return activeLogs.length > 0 ? "completed" : "idle";
     }
-    const agentOrder = ["CoordinatorAgent", "MemoryAgent", "WeatherAgent", "AttractionAgent", "PlannerAgent"];
+    const agentOrder = ["CoordinatorAgent", "FlightAgent", "HotelAgent", "BudgetAgent", "WeatherAgent", "AttractionAgent", "PlannerAgent"];
     const currentIndex = agentOrder.indexOf(activeAgent || "");
     const stepIndex = agentOrder.indexOf(stepAgent);
     if (stepIndex < currentIndex) return "completed";
@@ -329,7 +334,9 @@ function ChatPageContent() {
 
   const steps = [
     { name: "Coordinator", key: "CoordinatorAgent", icon: Terminal },
-    { name: "Memory", key: "MemoryAgent", icon: Database },
+    { name: "Flight", key: "FlightAgent", icon: Plane },
+    { name: "Hotel", key: "HotelAgent", icon: Hotel },
+    { name: "Budget", key: "BudgetAgent", icon: Cpu },
     { name: "Weather", key: "WeatherAgent", icon: Cloud },
     { name: "Attractions", key: "AttractionAgent", icon: MapPin },
     { name: "Planner", key: "PlannerAgent", icon: Sparkles }
@@ -506,6 +513,17 @@ function ChatPageContent() {
               </form>
               {sendError && (
                 <div className="px-6 pb-4 text-xs text-red-400 bg-slate-950/15">{sendError}</div>
+              )}
+              {itineraryGenerated && (
+                <div className="px-5 pb-4 flex items-center gap-2 bg-slate-950/30">
+                  <Link
+                    href={`/trips/${tripId}/dashboard`}
+                    className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white text-xs font-bold py-2.5 rounded-xl shadow-lg hover:shadow-indigo-500/30 transition-all duration-300"
+                  >
+                    <LayoutDashboard className="w-4 h-4" />
+                    View Full Dashboard
+                  </Link>
+                </div>
               )}
             </div>
 

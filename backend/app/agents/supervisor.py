@@ -1,19 +1,19 @@
 """
 SupervisorAgent: the single orchestration entry point for all message sends.
 
-FIXED:
-  - Removed _validate_trip_feasibility (was an extra Gemini call = more 429s)
-  - Removed Gemini from follow-up replies when itinerary exists (use local fallback)
-  - Now only 1 Gemini call happens per planning session (in planner.py)
-  - Coordinator makes ZERO Gemini calls (pure local logic)
+Week 5 additions:
+  - FlightAgent, HotelAgent, BudgetAgent wired into the pipeline
+  - All 5 core agents now invoked: Coordinator, Flight, Hotel, Budget, Planner
+  - Structured outputs stored in agent_outputs for dashboard endpoint consumption
 
 Responsibilities:
   1. Post-itinerary conversational follow-up (local, no Gemini)
   2. Gating: parse travel state with heuristics, ask for clarification if params missing
   3. Run coordinator_graph (local logistics context building)
-  4. Run planner_graph (single Gemini call for itinerary synthesis)
-  5. Stream SSE events throughout
-  6. Write Message, Itinerary, AgentRun to the database
+  4. Run flight_agent, hotel_agent, budget_agent (structured data, local)
+  5. Run planner_graph (single Gemini call for itinerary synthesis)
+  6. Stream SSE events throughout
+  7. Write Message, Itinerary, AgentRun to the database
 """
 import asyncio
 import logging
@@ -25,7 +25,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.agents.budget_agent import compute_budget
 from app.agents.coordinator import coordinator_graph
+from app.agents.flight_agent import get_flight_options
+from app.agents.hotel_agent import get_hotel_options
 from app.agents.parser import parse_travel_state
 from app.agents.planner import planner_graph
 from app.agents.state import AgentState
@@ -175,16 +178,67 @@ class SupervisorAgent:
         yield emit_log("CoordinatorGraph", "Building trip context and research data…")
         try:
             coord_output = await coordinator_graph.ainvoke(agent_state)
-            agent_state = {**agent_state, "agent_outputs": coord_output.get("agent_outputs", {})}
+            current_outputs = coord_output.get("agent_outputs", {})
+            agent_state = {**agent_state, "agent_outputs": current_outputs}
         except Exception:
             logger.exception("Coordinator graph failed — continuing with empty context")
-            coord_output = {}
+            current_outputs = {}
+
+        # --- Step 2: Flight Agent (local, structured) ---
+        yield emit_log("FlightAgent", f"Searching flight options from {origin} to {destination}…")
+        await asyncio.sleep(0.05)
+        try:
+            flight_data = await asyncio.to_thread(
+                get_flight_options, origin, destination, duration_days
+            )
+            if flight_data.get("found"):
+                yield emit_log("FlightAgent", f"Found flights via {flight_data.get('carrier')} — round-trip ~Rs.{flight_data.get('roundtrip_price_inr', 0):,}")
+            else:
+                yield emit_log("FlightAgent", f"Flight data: {flight_data.get('reason', 'not available')}")
+        except Exception:
+            logger.exception("FlightAgent failed — continuing")
+            flight_data = {"found": False, "reason": "Agent error", "origin": origin, "destination": destination}
+        current_outputs["flight"] = flight_data
+
+        # --- Step 3: Hotel Agent (local, structured) ---
+        yield emit_log("HotelAgent", f"Searching {budget or 'suitable'} hotels in {destination}…")
+        await asyncio.sleep(0.05)
+        try:
+            hotel_data = await asyncio.to_thread(
+                get_hotel_options, destination, budget, duration_days
+            )
+            if hotel_data.get("found"):
+                yield emit_log("HotelAgent", f"Found {len(hotel_data.get('hotels', []))} {hotel_data.get('budget_tier', '')} hotels — from Rs.{hotel_data.get('cheapest_nightly_inr', 0):,}/night")
+            else:
+                yield emit_log("HotelAgent", f"Hotel data: {hotel_data.get('reason', 'not available')}")
+        except Exception:
+            logger.exception("HotelAgent failed — continuing")
+            hotel_data = {"found": False, "reason": "Agent error", "destination": destination, "hotels": [], "budget_tier": "midrange", "cheapest_nightly_inr": 0, "total_hotel_estimate_inr": 0}
+        current_outputs["hotel"] = hotel_data
+
+        # --- Step 4: Budget Agent (aggregates flight + hotel + daily spend) ---
+        yield emit_log("BudgetAgent", "Computing trip budget breakdown…")
+        await asyncio.sleep(0.05)
+        try:
+            budget_data = await asyncio.to_thread(
+                compute_budget, flight_data, hotel_data, duration_days, budget
+            )
+            status_label = budget_data.get("status", "unknown")
+            total = budget_data.get("grand_total_inr", 0)
+            yield emit_log("BudgetAgent", f"Budget breakdown ready — Total: Rs.{total:,} ({status_label})")
+        except Exception:
+            logger.exception("BudgetAgent failed — continuing")
+            budget_data = {"status": "incomplete", "grand_total_inr": 0, "missing": ["flight", "hotel"], "warnings": ["Agent error"]}
+        current_outputs["budget"] = budget_data
+
+        # Update agent_state with all structured outputs
+        agent_state = {**agent_state, "agent_outputs": current_outputs}
 
         yield emit_log("WeatherAgent", f"Fetching weather and climate data for {destination}…")
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
 
         yield emit_log("AttractionAgent", f"Searching top-rated spots and local experiences in {destination}…")
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.05)
 
         yield emit_log("PlannerAgent", f"Synthesising final {duration_days}-day itinerary…")
 
@@ -250,7 +304,7 @@ class SupervisorAgent:
                 from pydantic import SecretStr
 
                 llm = ChatGoogleGenerativeAI(
-                    model="gemini-3.5-flash",
+                    model="gemini-2.0-flash",
                     api_key=SecretStr(api_key),
                     max_retries=1,
                     timeout=15,
