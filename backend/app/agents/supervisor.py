@@ -329,7 +329,8 @@ class SupervisorAgent:
                         f"2. Never output a generic menu, canned bullet points, or instructions on what they can ask. Be a real conversational advisor!\n"
                         f"3. If they ask about historic places or attractions in {destination}, recommend specific top historic landmarks "
                         f"with brief fascinating details, entry fees, and tips.\n"
-                        f"4. If they ask to modify the plan, explain specifically how their day-by-day schedule can be adapted."
+                        f"4. If they ask to modify the plan, explain specifically how their day-by-day schedule can be adapted.\n"
+                        f"5. If {destination} is Meerut (or if they mention Meerut cloth bazaars/shopping days), validate and emphasize that Meerut's famous Big Wholesale & Retail Cloths Bazaar (Subhash Bazar / Ghantaghar / Lalkurti / Bada Bazaar) operates specifically on THURSDAYS and SATURDAYS, while Abu Lane is closed on Tuesdays."
                     )
                 )
                 user_prompt = (
@@ -338,9 +339,19 @@ class SupervisorAgent:
                     f"User's Latest Question: {user_query}\n\n"
                     "Respond as a knowledgeable, human-like AI travel assistant answering their question directly."
                 )
-                response = await llm.ainvoke([sys_msg, HumanMessage(content=user_prompt)])
-                if response and response.content:
-                    return str(response.content)
+                for model_name in ("gemini-2.0-flash", "gemini-1.5-flash"):
+                    try:
+                        llm = ChatGoogleGenerativeAI(
+                            model=model_name,
+                            api_key=SecretStr(api_key),
+                            max_retries=1,
+                            timeout=12,
+                        )
+                        response = await llm.ainvoke([sys_msg, HumanMessage(content=user_prompt)])
+                        if response and response.content:
+                            return str(response.content)
+                    except Exception as exc:
+                        logger.warning("Gemini follow-up failed with %s (%s)", model_name, exc)
             except Exception as exc:
                 logger.warning("Gemini follow-up failed (%s) — using smart local conversational fallback", exc)
 
@@ -351,7 +362,57 @@ class SupervisorAgent:
         """Intelligent conversational AI response when Gemini is rate-limited."""
         q = user_query.lower()
 
-        if any(w in q for w in ["historic", "history", "monument", "attraction", "visit", "sightseeing", "place", "where to go", "what to see", "fort", "museum", "temple", "tomb", "palace", "landmark"]):
+        if any(w in q for w in ["shop", "streetwear", "market", "clothes", "cloth", "cloths", "bazaar", "bazar", "fashion", "buy", "mall", "day", "days", "thursday", "saturday", "sunday", "when", "open", "timing", "better"]):
+            dest_lower = destination.lower()
+            if "meerut" in dest_lower:
+                return (
+                    f"# 🛍️ Meerut Textile & Cloth Bazaar Guide — Market Days & Timings\n\n"
+                    f"You are absolutely spot on, and thank you for calling that out! Unlike many other cities where Sunday is the main weekly bazaar day, **Meerut's iconic Wholesale & Retail Cloth Bazaar operates specifically on Thursdays and Saturdays.**\n\n"
+                    f"Here is your complete guide to planning your shopping days in **Meerut**:\n\n"
+                    f"### 📅 1. Thursday & Saturday: The Big Cloth Bazaar (Subhash Bazar, Ghantaghar & Lalkurti)\n"
+                    f"- **Why it's famous**: Traders from across Western U.P. arrive on **Thursdays and Saturdays** for the largest wholesale and surplus textile, saree, fabric roll, and garment bazaar.\n"
+                    f"- **Timings**: Best to visit between **10:30 AM and 6:30 PM**.\n"
+                    f"- **What to buy**: Direct-from-mill textiles, dress materials, ethnic suits, and surplus fashion at **40–60% below regular retail prices**.\n"
+                    f"- **Bargaining Tip**: Start bargaining at 50% of the initial quote—cash is preferred by many patri and wholesale stall owners.\n\n"
+                    f"### 🏛️ 2. Abu Lane (High-Street Branded Fashion & Cafes)\n"
+                    f"- **Schedule**: **Open on Sundays** | **Weekly Off: Tuesdays**.\n"
+                    f"- **What to expect**: Meerut's premier high-street boulevard for branded clothing, footwear, jewelry, and cozy cafes to relax between shopping sessions.\n\n"
+                    f"### 🏬 3. Sadar Bazaar & Shastri Nagar (Central Market)\n"
+                    f"- **Schedule**: Open 6 days a week (some sections close on Sundays/Mondays).\n"
+                    f"- **Best for**: Evening street shopping, trendy streetwear, accessories, and local street food. Most active after **5:00 PM**.\n\n"
+                    f"---\n\n"
+                    f"💡 **Trip Planner Recommendation**: I have noted **Thursday and Saturday** as your dedicated Cloth Bazaar shopping days in your Meerut itinerary. Would you like me to adjust your day-by-day plan so that your major shopping expedition falls on Thursday or Saturday? 🗓️✨"
+                )
+            elif "delhi" in dest_lower:
+                return (
+                    f"# 🛍️ Delhi Market Days & Shopping Schedule\n\n"
+                    f"Here is when Delhi's top markets operate so you don't visit on a closed day:\n\n"
+                    f"- **Sarojini Nagar**: **Closed on Mondays** | Best visited Tuesday–Thursday morning around 11:00 AM for fresh streetwear surplus.\n"
+                    f"- **Chandni Chowk & Katra Neel**: Huge textile and wedding cloth bazaar | **Closed on Sundays**.\n"
+                    f"- **Lajpat Nagar (Central Market)**: Famous for ethnic wear, sarees, and fabrics | **Closed on Mondays**.\n"
+                    f"- **Janpath Market**: Open daily 11 AM – 8 PM for bohemian fashion and handicrafts.\n\n"
+                    f"Want me to organize your Delhi shopping itinerary around these open days? 🗓️"
+                )
+            elif "mumbai" in dest_lower:
+                return (
+                    f"# 🛍️ Mumbai Shopping Districts & Market Schedule\n\n"
+                    f"Here are the best times and days for Mumbai shopping:\n\n"
+                    f"- **Linking Road & Colaba Causeway**: Open daily 11:00 AM – 9:00 PM for streetwear, shoes, and jewelry.\n"
+                    f"- **Chor Bazaar**: Famous **Friday Juma Market** starting early Friday morning for antiques and surplus.\n"
+                    f"- **Crawford Market**: Closed on Sundays | Best for wholesale imports and spices.\n\n"
+                    f"Would you like recommendations on cafes near these shopping streets? ☕"
+                )
+            else:
+                return (
+                    f"# 🛍️ Streetwear & Shopping Guide for **{destination}**\n\n"
+                    f"Here are key tips for shopping in **{destination}**:\n\n"
+                    f"- **Textile & Cloth Bazaars**: Most traditional wholesale markets operate on specific weekdays or Saturdays (often closed on Sundays or Tuesdays depending on the district).\n"
+                    f"- **Street Fashion & Bargain Markets** — Head out early (around 11 AM) for the freshest streetwear drops, hoodies, cargo pants, and sneakers. Start bargaining at 50% of the quoted price!\n"
+                    f"- **Local Thrift & Export Surplus Lanes** — Famous for branded surplus garments at ₹200–₹600.\n\n"
+                    f"Want me to recommend the best cafes nearby or check specific market closing days for your itinerary? ☕"
+                )
+
+        elif any(w in q for w in ["historic", "history", "monument", "attraction", "visit", "sightseeing", "place", "where to go", "what to see", "fort", "museum", "temple", "tomb", "palace", "landmark"]):
             dest_lower = destination.lower()
             if "delhi" in dest_lower:
                 return (
@@ -382,14 +443,6 @@ class SupervisorAgent:
                     f"Let me know which specific era or monument type interests you most, and I'll tailor your daily schedule! ✨"
                 )
 
-        elif any(w in q for w in ["shop", "streetwear", "market", "clothes", "fashion", "buy", "mall"]):
-            return (
-                f"# 🛍️ Streetwear & Shopping Guide for **{destination}**\n\n"
-                f"You're in for a treat! Here are the best shopping districts in **{destination}**:\n\n"
-                f"- **Street Fashion & Bargain Markets** — Head out early (around 11 AM) for the freshest streetwear drops, hoodies, cargo pants, and sneakers. Start bargaining at 50% of the quoted price!\n"
-                f"- **Local Thrift & Export Surplus Lanes** — Famous for branded surplus garments at ₹200–₹600.\n\n"
-                f"Want me to recommend the best cafes nearby so you can take a break between shopping sessions? ☕"
-            )
 
         elif any(w in q for w in ["hotel", "stay", "accommodation", "hostel", "resort"]):
             return (

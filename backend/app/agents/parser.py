@@ -46,11 +46,11 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
 
     text = " ".join(parts).lower()
 
-    # Origin — match British AND American spelling, plus 'I'm from X', 'from Gujarat'
+    # Origin — match British AND American spelling, plus 'I'm from X', 'from Gujarat', 'travel from X to Y'
     if not origin:
-        # Pattern 1: travelling/traveling/flying/leaving/coming from X
+        # Pattern 1: travelling/traveling/travel/flying/leaving/coming from X
         m = re.search(
-            r'\b(?:travellin?g|departing|flying|leaving|coming)\s+from\s+([a-zA-Z][a-zA-Z\s]{1,30}?)(?:\s+to\b|\s+for\b|,|\.|$)',
+            r'\b(?:travellin?g|travel|departing|flying|leaving|coming)\s+from\s+([a-zA-Z][a-zA-Z\s]{1,30}?)(?:\s+to\b|\s+for\b|,|\.|$)',
             text
         )
         if m:
@@ -74,6 +74,18 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
             stop_words = {"here", "home", "there", "the", "a", "an", "my", "your", "our", "their", "its"}
             if candidate.lower() not in stop_words and len(candidate) > 2:
                 origin = candidate.title()
+
+    # Destination override — if user explicitly said 'to Dwarka', 'visiting Dwarka', 'trip to Dwarka'
+    dest_match = re.search(
+        r'\b(?:from\s+[a-zA-Z\s]{2,30}?\s+to|travel\s+to|travelling\s+to|traveling\s+to|trip\s+to|visiting|go\s+to|going\s+to)\s+([a-zA-Z][a-zA-Z\s]{1,25}?)(?:\s+for\b|\s+with\b|\s+in\b|\s+on\b|,|\.|$)',
+        text,
+        re.IGNORECASE,
+    )
+    if dest_match:
+        candidate_dest = dest_match.group(1).strip().title()
+        stop_words_dest = {"Here", "Home", "There", "The", "A", "An", "My", "Your", "Our", "Their"}
+        if candidate_dest not in stop_words_dest and len(candidate_dest) > 2:
+            destination = candidate_dest
 
     # Budget
     budget = None
@@ -141,28 +153,55 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
     ]
     preferences = [kw for kw in preference_keywords if re.search(r'\b' + kw + r'\b', text)]
 
-    # Goal — check multi-word phrases first
+    # Goal — check explicit phrase 'goal is ...' first
     goal = None
-    multi_word_goals = [
-        ("streetwear shopping", "Streetwear Shopping"),
-        ("street shopping", "Street Shopping"),
-        ("street food", "Street Food"),
-        ("food tour", "Food Tour"),
-    ]
-    for phrase, label in multi_word_goals:
-        if phrase in text:
-            goal = label
-            break
+    m_goal = re.search(r'\b(?:my\s+)?(?:goal|purpose|aim|interest|want\s+to\s+do|for)\s*(?:is|are|:)?\s+([a-zA-Z0-9\s,&\+]{3,40}?)(?:\.|$|\n)', text, re.IGNORECASE)
+    if m_goal:
+        candidate_goal = m_goal.group(1).strip()
+        if len(candidate_goal) > 2 and candidate_goal.lower() not in ("a", "the", "my", "this", "trip", "travel"):
+            goal = candidate_goal.title()
+
+    if not goal:
+        multi_word_goals = [
+            ("streetwear shopping", "Streetwear Shopping"),
+            ("street shopping", "Street Shopping"),
+            ("street food", "Street Food"),
+            ("food tour", "Food Tour"),
+            ("beaches and adventure", "Beaches and Adventure"),
+            ("beach and adventure", "Beaches and Adventure"),
+        ]
+        for phrase, label in multi_word_goals:
+            if phrase in text:
+                goal = label
+                break
 
     if not goal:
         goal_keywords = [
-            "honeymoon", "anniversary", "business", "work", "backpacking",
-            "vacation", "holiday", "relaxation", "explore", "shopping", "beach", "sightseeing",
-            "spiritual", "medical", "party",
+            ("adventure", "Adventure"),
+            ("beach", "Beaches"),
+            ("temple", "Temples & Pilgrimage"),
+            ("pilgrim", "Temples & Pilgrimage"),
+            ("honeymoon", "Honeymoon"),
+            ("anniversary", "Anniversary"),
+            ("business", "Business"),
+            ("work", "Work"),
+            ("backpack", "Backpacking"),
+            ("vacation", "Vacation"),
+            ("holiday", "Holiday"),
+            ("relax", "Relaxation"),
+            ("explore", "Exploration"),
+            ("sightseeing", "Sightseeing"),
+            ("shop", "Shopping"),
+            ("spiritual", "Spiritual"),
+            ("nature", "Nature & Wildlife"),
+            ("wildlife", "Nature & Wildlife"),
+            ("food", "Food Tour"),
+            ("party", "Nightlife & Party"),
+            ("nightlife", "Nightlife & Party"),
         ]
-        for kw in goal_keywords:
-            if re.search(r'\b' + kw + r'\b', text):
-                goal = kw.capitalize()
+        for kw, label in goal_keywords:
+            if kw in text:
+                goal = label
                 break
 
     # Conditions
