@@ -20,6 +20,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
 from pydantic import SecretStr
 
+from app.agents.gemini_client import call_gemini
 from app.agents.state import AgentState
 from app.core.config import get_settings
 from app.tools.places_tool import (
@@ -100,6 +101,8 @@ def merge_node(state: AgentState) -> dict[str, Any]:
     outputs = dict(state.get("agent_outputs") or {})
 
     research_info = outputs.get("research", {}).get("result", "")
+    attractions_info = outputs.get("attractions", {}).get("summary", "")
+    weather_info = outputs.get("weather", {})
 
     # Determine budget tier
     budget_tier = _get_budget_tier(budget)
@@ -146,6 +149,14 @@ def merge_node(state: AgentState) -> dict[str, Any]:
             coordinator_context = ""
             if research_info:
                 coordinator_context = f"\n**Research Context:**\n{research_info}\n"
+            if attractions_info:
+                coordinator_context += f"\n**Top Attractions (from AttractionAgent):**\n{attractions_info[:400]}\n"
+            if weather_info:
+                w_temp = weather_info.get('temp', '')
+                w_cond = weather_info.get('condition', '')
+                w_tips = str(weather_info.get('packing_tips') or weather_info.get('forecast') or '')
+                if w_temp or w_cond:
+                    coordinator_context += f"\n**Weather Context:** {w_temp}, {w_cond}. {w_tips[:150]}\n"
 
             system_content = f"""You are the VoyagerAI Planner Agent. You MUST follow these STRICT rules:
 
@@ -171,7 +182,7 @@ RULE 4 - PRICING: Include prices for everything:
 
 RULE 5 - FORMAT: Write a beautiful Markdown itinerary with emojis, bold headers, day-by-day breakdown.
 
-Now call the tools first, then write the itinerary following ALL rules above."""
+Now write the comprehensive, beautifully formatted Markdown itinerary following ALL rules above."""
 
             user_prompt = (
                 f"Plan a **{budget_tier.upper()} BUDGET** trip to **{destination}** from **{origin or 'unspecified origin'}**.\n"
@@ -182,10 +193,7 @@ Now call the tools first, then write the itinerary following ALL rules above."""
                 f"- Interests/Preferences: {', '.join(preferences) if preferences else 'streetwear shopping, local food, sightseeing'}\n"
                 f"- Past context: {memory_context or 'None'}\n"
                 f"{coordinator_context}\n"
-                "Steps:\n"
-                "1. Call get_weather for the destination.\n"
-                "2. Call search_places with query_type='all' to get places data.\n"
-                "3. Write the full itinerary following ALL system rules:\n"
+                "Write the full itinerary following ALL system rules:\n"
                 "   - Transport section with prices from origin\n"
                 "   - Budget-appropriate hotels with Rs./night prices\n"
                 "   - Specific named shopping streets (Fashion Street, Linking Road, etc.) with price ranges\n"
@@ -198,26 +206,8 @@ Now call the tools first, then write the itinerary following ALL rules above."""
                 HumanMessage(content=user_prompt)
             ]
 
-            # Step 1: LLM decides which tools to call
-            response = llm_with_tools.invoke(messages)
-            messages.append(response)
-
-            # Step 2: Execute tool calls
-            if isinstance(response, AIMessage) and response.tool_calls:
-                logger.info("Planner: executing %d tool calls", len(response.tool_calls))
-                for tc in response.tool_calls:
-                    if tc["name"] == "get_weather":
-                        tool_res = get_weather.invoke(tc["args"])
-                    elif tc["name"] == "search_places":
-                        tool_res = search_places.invoke(tc["args"])
-                    else:
-                        tool_res = "Unknown tool"
-                    messages.append(ToolMessage(content=str(tool_res), tool_call_id=tc["id"], name=tc["name"]))
-
-            # Step 3: Final synthesis — use bare llm (no tools) to prevent looping
-            final_response = llm.invoke(messages)
-            full_narrative = str(final_response.content) if final_response.content else ""
-            gemini_success = True
+            full_narrative = call_gemini(messages, timeout=20)
+            gemini_success = bool(full_narrative and full_narrative.strip())
 
         except Exception:
             logger.warning("Gemini Planner failed — using local fallback", exc_info=True)

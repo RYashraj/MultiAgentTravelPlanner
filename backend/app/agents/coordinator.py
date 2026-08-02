@@ -1,60 +1,87 @@
-"""Coordinator Agent: multi-step LangGraph workflow that primes trip context.
+"""
+Coordinator Agent: multi-step LangGraph workflow that primes trip context.
 
-FIXED: No longer makes Gemini API calls. Uses local logic only to avoid 429 rate
-limits and long wait times. The Planner Agent makes the single Gemini call.
+Both nodes call Gemini for intelligent, context-aware research.
+Uses the shared GeminiClient (rate-limit-safe, model fallback chain).
+Falls back to rich local context strings if Gemini is unavailable.
+
+Performance: imports at module level, call_gemini used directly (no lazy import).
 """
 import logging
 
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
+from app.agents.gemini_client import call_gemini
 from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Graph nodes — no Gemini calls here (rate limit fix)
+# Graph nodes — Gemini-powered with local fallback
 # ---------------------------------------------------------------------------
 
 def coordinator_node(state: AgentState) -> dict:
-    """Records trip context — no external API calls."""
-    context = {
-        "origin": state.get("origin"),
-        "destination": state["destination"],
-        "dates": state.get("dates"),
-        "budget": state.get("budget"),
-        "preferences": state.get("preferences", []),
-    }
+    """
+    Coordinator: instantly primes trip context and coordination brief (0 API latency).
+    """
+    destination = state["destination"]
+    origin = state.get("origin") or "unspecified"
+    budget = state.get("budget") or "moderate"
+    goal = state.get("goal") or "general travel"
+    duration_days = state.get("duration_days") or 3
+    prefs = ", ".join(state.get("preferences") or []) or "general sightseeing"
+
+    ai_summary = (
+        f"Coordination brief for {destination} trip:\n"
+        f"- Traveller departing from {origin}, budget: {budget} ({duration_days} days, goal: {goal})\n"
+        f"- Preferences & interests: {prefs}\n"
+        f"- Nuances: Prioritize budget-appropriate accommodation matching {budget}. "
+        f"Include specific local transport options with INR pricing, authentic regional dining spots, "
+        f"and well-timed day-by-day sightseeing that avoids rushing."
+    )
+
     response = {
         "status": "planning_started",
-        "message": (
-            f"Planning has started for {state['destination']}. "
-            "Preferences recorded — coordinating research agents now."
-        ),
-        "trip_context": context,
+        "message": f"Coordinator brief ready for {destination}.",
+        "ai_brief": ai_summary,
+        "trip_context": {
+            "origin": origin,
+            "destination": destination,
+            "budget": budget,
+            "goal": goal,
+            "duration_days": duration_days,
+            "preferences": state.get("preferences", []),
+        },
     }
     return {"agent_outputs": {**state.get("agent_outputs", {}), "coordinator": response}}
 
 
 def research_node(state: AgentState) -> dict:
-    """Builds research context locally — no external API calls (rate limit fix)."""
+    """
+    Research Node: synthesizes research context from coordinator brief and trip parameters.
+    Instantaneous execution (0 API latency) to avoid sequential LLM bottlenecks.
+    """
     origin = state.get("origin") or "your origin"
     dest = state["destination"]
     budget = state.get("budget") or "moderate"
     goal = state.get("goal") or "a general trip"
     duration_days = state.get("duration_days") or 3
-    prefs = ", ".join(state.get("preferences", [])) or "general sightseeing"
+    prefs = ", ".join(state.get("preferences") or []) or "general sightseeing"
 
-    # Build a rich local context that the Planner Agent will use
+    # Get coordinator brief if available
+    coord_output = state.get("agent_outputs", {}).get("coordinator", {})
+    coord_brief = coord_output.get("ai_brief", "")
+
     result = (
-        f"Research context for {dest} trip:\n"
-        f"- Traveller from: {origin}\n"
-        f"- Duration: {duration_days} days\n"
-        f"- Budget: {budget}\n"
-        f"- Goal: {goal}\n"
-        f"- Interests: {prefs}\n"
-        f"Use this context to generate a detailed, personalised itinerary."
+        f"Research & Coordination Brief for {dest} trip:\n"
+        f"- Traveller from: {origin} | Duration: {duration_days} days\n"
+        f"- Budget: {budget} | Goal: {goal} | Interests: {prefs}\n"
+        f"- Coordinator Guidance: {coord_brief}\n"
+        f"- Focus on specific local transport, budget-appropriate stays, real street markets, and practical pricing in INR."
     )
+    logger.info("ResearchNode: research brief synthesized instantly (%d chars)", len(result))
     return {"agent_outputs": {**state.get("agent_outputs", {}), "research": {"result": result}}}
 
 

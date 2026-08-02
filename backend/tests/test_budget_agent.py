@@ -236,3 +236,11 @@ def test_breakdown_fields_always_present():
 def test_warnings_not_empty_on_missing_data():
     result = compute_budget(None, None, 3, "budget")
     assert len(result["warnings"]) > 0
+
+
+def test_target_budget_fitting():
+    """Verify that an explicit target budget (e.g. 50000) adjusts hotel and daily spend to fit within budget and explains feasibility."""
+    result = compute_budget(_good_flight(4500), _good_hotel(3500, 10), 10, "50000")
+    assert result["grand_total_inr"] <= 50000
+    assert "Target budget: ₹50,000" in result["feasibility"]
+    assert len(result["savings_tips"]) > 0

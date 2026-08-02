@@ -87,8 +87,13 @@ def delete_trip(
     db: Session = Depends(get_db),
 ):
     trip = _owned_trip(trip_id, user, db)
-    db.delete(trip)
-    db.commit()
+    try:
+        db.delete(trip)
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Failed to delete trip %s", trip_id)
+        raise HTTPException(status_code=500, detail="Failed to delete trip")
 
 
 @router.get("/{trip_id}/messages", response_model=list[MessageResponse])
@@ -97,8 +102,20 @@ def list_messages(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _owned_trip(trip_id, user, db)
-    return MessageRepository(db).list_for_trip(trip_id)
+    trip = _owned_trip(trip_id, user, db)
+    msgs = MessageRepository(db).list_for_trip(trip_id)
+    if not msgs:
+        welcome_msg = (
+            f"Hello! Let's plan your **{trip.destination}** trip! ✈️\n\n"
+            f"Tell me your travel details:\n"
+            f"- **Where** are you travelling from?\n"
+            f"- **How many days** would you like to stay?\n"
+            f"- **What is your budget** (e.g., ₹50,000, mid-range, luxury)?\n"
+            f"- **What is your main goal** (e.g., shopping, sightseeing, relaxation)?"
+        )
+        created = MessageRepository(db).create(trip.id, user.id, "assistant", welcome_msg)
+        return [created]
+    return msgs
 
 
 @router.get("/{trip_id}/itineraries")

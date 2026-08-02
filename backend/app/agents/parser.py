@@ -1,14 +1,13 @@
 """
 Parser Agent: extracts structured travel parameters from chat history.
 
-Tries Gemini first (JSON mode) — falls back to regex heuristics if unavailable.
+Tries Gemini first (JSON mode via shared gemini_client) — falls back to regex heuristics.
+Using the shared client ensures rate limiting, model fallback, and retry logic are applied.
 """
 import json
 import logging
 import re
 from typing import Any
-
-import httpx
 
 from app.core.config import get_settings
 
@@ -75,16 +74,21 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
             if candidate.lower() not in stop_words and len(candidate) > 2:
                 origin = candidate.title()
 
-    # Destination override — if user explicitly said 'to Dwarka', 'visiting Dwarka', 'trip to Dwarka'
+    # Destination override — if user explicitly said 'to Dwarka', 'visiting Dwarka', 'trip to Dwarka', 'for Delhi'
     dest_match = re.search(
-        r'\b(?:from\s+[a-zA-Z\s]{2,30}?\s+to|travel\s+to|travelling\s+to|traveling\s+to|trip\s+to|visiting|go\s+to|going\s+to)\s+([a-zA-Z][a-zA-Z\s]{1,25}?)(?:\s+for\b|\s+with\b|\s+in\b|\s+on\b|,|\.|$)',
+        r'\b(?:from\s+[a-zA-Z\s]{2,30}?\s+to|travel\s+to|travelling\s+to|traveling\s+to|trip\s+to|trip\s+for|plan\s+to|plan\s+for|details\s+of|details\s+for|visiting|go\s+to|going\s+to|to|for)\s+([a-zA-Z][a-zA-Z\s]{1,25}?)(?:\s+for\b|\s+with\b|\s+in\b|\s+on\b|,|\.|$)',
         text,
         re.IGNORECASE,
     )
     if dest_match:
         candidate_dest = dest_match.group(1).strip().title()
-        stop_words_dest = {"Here", "Home", "There", "The", "A", "An", "My", "Your", "Our", "Their"}
-        if candidate_dest not in stop_words_dest and len(candidate_dest) > 2:
+        stop_words_dest = {
+            "Here", "Home", "There", "The", "A", "An", "My", "Your", "Our", "Their",
+            "Shopping", "Exploring", "Relaxing", "Relaxation", "Adventure", "Business",
+            "Work", "Sightseeing", "Vacation", "Holiday", "Stay", "Travel", "Days",
+            "Weeks", "Months", "Trip", "Plan"
+        }
+        if candidate_dest not in stop_words_dest and len(candidate_dest) > 2 and re.match(r'^[a-zA-Z\s]+$', candidate_dest):
             destination = candidate_dest
 
     # Budget
@@ -228,7 +232,8 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
 async def parse_travel_state(messages: list[Any], destination: str) -> dict[str, Any]:
     """
     Extract travel-plan parameters from chat history.
-    Uses Gemini JSON mode when configured; falls back to heuristics.
+    Uses shared call_gemini_async (rate-limited, model fallback) when configured;
+    falls back to heuristics.
     """
     settings = get_settings()
 
@@ -241,27 +246,34 @@ async def parse_travel_state(messages: list[Any], destination: str) -> dict[str,
             history_lines.append(f"{sender}: {content}")
     chat_history_text = "\n".join(history_lines)
 
-    # Always try heuristics first — zero API calls, instant result
+    # Always run heuristics first as a baseline — instant, zero API calls
     heuristic = heuristic_parse(messages, destination)
-    
-    # If heuristics found any of the core params, trust it (no Gemini call — saves rate limits)
+
+    # If ALL 4 core params found by heuristics, skip Gemini (save rate limit)
     heuristic_score = sum([
         bool(heuristic.get("origin")),
         bool(heuristic.get("budget")),
         bool(heuristic.get("duration_days")),
         bool(heuristic.get("goal")),
     ])
-    if heuristic_score >= 1:
+    if heuristic_score == 4:
+        logger.debug("parse_travel_state: all 4 params found by heuristics — skipping Gemini")
         return heuristic
 
-    if settings.gemini_api_key:
+    if not settings.gemini_api_key:
+        return heuristic
+
+    try:
+        from app.agents.gemini_client import call_gemini_async
+        from langchain_core.messages import HumanMessage
+
         prompt = (
             f"You are the travel coordinator agent for VoyagerAI.\n"
             f"Analyze the chat history for a trip to '{destination}' and extract planning parameters.\n\n"
             f"CRITICAL: Do NOT guess or hallucinate. If a value is not explicitly stated, set it to null.\n\n"
-            f"Return ONLY a raw JSON object with these fields:\n"
+            f"Return ONLY a raw JSON object (no markdown, no code blocks) with these fields:\n"
             f"- origin: string or null (city the user departs from)\n"
-            f"- destination: string (default: '{destination}')\n"
+            f"- destination: string (default: '{destination}', BUT if the user explicitly asks for a different destination city in the chat history, return that city instead!)\n"
             f"- budget: string or null (e.g. '$1000', '50000 INR', 'luxury', 'no limit')\n"
             f"- duration_days: integer or null (number of trip days)\n"
             f"- dates: string or null (travel month, season, or date range)\n"
@@ -271,35 +283,26 @@ async def parse_travel_state(messages: list[Any], destination: str) -> dict[str,
             f"Chat History:\n{chat_history_text}"
         )
 
-        url = (
-            f"https://generativelanguage.googleapis.com/v1beta/models/"
-            f"gemini-3.5-flash:generateContent?key={settings.gemini_api_key}"
-        )
-        payload = {
-            "contents": [{"parts": [{"text": prompt}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
-        }
+        raw = await call_gemini_async([HumanMessage(content=prompt)], timeout=6)
 
-        try:
-            async with httpx.AsyncClient(timeout=8.0) as client:
-                response = await client.post(url, json=payload)
-                if response.status_code == 200:
-                    data = response.json()
-                    text_out = data["candidates"][0]["content"]["parts"][0]["text"]
-                    parsed = json.loads(text_out)
-                    return {
-                        "origin": parsed.get("origin") or heuristic.get("origin"),
-                        "destination": parsed.get("destination") or destination,
-                        "budget": parsed.get("budget") or heuristic.get("budget"),
-                        "duration_days": parsed.get("duration_days") or heuristic.get("duration_days"),
-                        "dates": parsed.get("dates") or heuristic.get("dates"),
-                        "goal": parsed.get("goal") or heuristic.get("goal"),
-                        "conditions": parsed.get("conditions") or heuristic.get("conditions"),
-                        "preferences": parsed.get("preferences") or heuristic.get("preferences") or [],
-                    }
-                else:
-                    logger.warning("Gemini returned status %s for parse_travel_state — falling back to heuristics", response.status_code)
-        except Exception:
-            logger.exception("Gemini parse_travel_state failed — using heuristics")
+        # Strip markdown fences if present
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            lines = cleaned.split("\n")
+            cleaned = "\n".join(line for line in lines if not line.startswith("```")).strip()
+
+        parsed = json.loads(cleaned)
+        return {
+            "origin": parsed.get("origin") or heuristic.get("origin"),
+            "destination": parsed.get("destination") or heuristic.get("destination") or destination,
+            "budget": parsed.get("budget") or heuristic.get("budget"),
+            "duration_days": parsed.get("duration_days") or heuristic.get("duration_days"),
+            "dates": parsed.get("dates") or heuristic.get("dates"),
+            "goal": parsed.get("goal") or heuristic.get("goal"),
+            "conditions": parsed.get("conditions") or heuristic.get("conditions"),
+            "preferences": parsed.get("preferences") or heuristic.get("preferences") or [],
+        }
+    except Exception:
+        logger.exception("Gemini parse_travel_state failed — using heuristics")
 
     return heuristic
