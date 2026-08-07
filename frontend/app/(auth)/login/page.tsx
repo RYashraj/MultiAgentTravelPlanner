@@ -45,7 +45,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans flex flex-col relative overflow-hidden">
+    <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans flex flex-col relative overflow-hidden">
       {/* Background Gradients */}
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-0 right-1/4 w-[400px] h-[400px] bg-purple-500/10 rounded-full blur-[100px] pointer-events-none" />
@@ -56,22 +56,22 @@ export default function LoginPage() {
         <div className="w-full max-w-md space-y-8">
           {/* Title/Logo */}
           <div className="text-center space-y-3">
-            <div className="inline-flex items-center gap-3 bg-slate-900/60 border border-slate-800/80 px-4 py-2 rounded-2xl backdrop-blur-sm">
+            <div className="inline-flex items-center gap-3 bg-[var(--color-surface-alt)] border border-[var(--color-border)]/80 px-4 py-2 rounded-2xl backdrop-blur-sm">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/35">
                 <Compass className="w-4.5 h-4.5 text-white" />
               </div>
               <div>
-                <h1 className="text-md font-bold tracking-tight bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+                <h1 className="text-md font-bold tracking-tight bg-gradient-to-r from-[var(--color-text-primary)] to-[var(--color-text-secondary)] bg-clip-text text-transparent">
                   VoyagerAI
                 </h1>
               </div>
             </div>
             <h2 className="text-2xl font-bold tracking-tight text-white mt-4">Welcome back</h2>
-            <p className="text-sm text-slate-400">Sign in to orchestrate your travel itinerary</p>
+            <p className="text-sm text-[var(--color-text-secondary)]">Sign in to orchestrate your travel itinerary</p>
           </div>
 
           {/* Login Card */}
-          <div className="bg-slate-900/50 border border-slate-800/80 rounded-3xl p-8 backdrop-blur-md shadow-2xl shadow-indigo-950/10 space-y-6">
+          <div className="bg-[var(--color-surface)]/50 border border-[var(--color-border)]/80 rounded-3xl p-8 backdrop-blur-md shadow-2xl shadow-indigo-950/10 space-y-6">
             
             {/* Mock Auth Mode Notice */}
             {isMockMode && (
@@ -79,7 +79,7 @@ export default function LoginPage() {
                 <ShieldCheck className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-xs font-semibold text-indigo-300">Mock Auth Mode Active</h4>
-                  <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  <p className="text-[10px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">
                     Enter any email to log in instantly. (Supabase keys are not configured in your local environment variables).
                   </p>
                 </div>
@@ -97,11 +97,11 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-5">
               {/* Email Field */}
               <div className="space-y-2">
-                <label htmlFor="email" className="text-xs font-medium text-slate-300 tracking-wider">
+                <label htmlFor="email" className="text-xs font-medium text-[var(--color-text-secondary)] tracking-wider">
                   Email Address
                 </label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-text-muted)] group-focus-within:text-indigo-400 transition-colors">
                     <Mail className="w-4.5 h-4.5" />
                   </div>
                   <input
@@ -110,7 +110,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="w-full bg-slate-950/80 border border-slate-800/80 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
+                    className="w-full bg-[var(--color-surface-alt)] border border-[var(--color-border)]/80 rounded-xl py-3 pl-11 pr-4 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
                     required
                   />
                 </div>
@@ -118,11 +118,11 @@ export default function LoginPage() {
 
               {/* Password Field */}
               <div className="space-y-2">
-                <label htmlFor="password" className="text-xs font-medium text-slate-300 tracking-wider">
+                <label htmlFor="password" className="text-xs font-medium text-[var(--color-text-secondary)] tracking-wider">
                   Password
                 </label>
                 <div className="relative group">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500 group-focus-within:text-indigo-400 transition-colors">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-[var(--color-text-muted)] group-focus-within:text-indigo-400 transition-colors">
                     <Lock className="w-4.5 h-4.5" />
                   </div>
                   <input
@@ -131,7 +131,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder={isMockMode ? "Optional in Mock Mode" : "••••••••"}
-                    className="w-full bg-slate-950/80 border border-slate-800/80 rounded-xl py-3 pl-11 pr-4 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
+                    className="w-full bg-[var(--color-surface-alt)] border border-[var(--color-border)]/80 rounded-xl py-3 pl-11 pr-4 text-sm text-[var(--color-text-primary)] placeholder-[var(--color-text-muted)] focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all font-sans"
                     required={!isMockMode}
                   />
                 </div>
@@ -159,9 +159,9 @@ export default function LoginPage() {
 
             {/* Divider */}
             <div className="relative flex items-center py-2">
-              <div className="flex-grow border-t border-slate-800"></div>
-              <span className="flex-shrink-0 mx-4 text-slate-500 text-xs">Or continue with</span>
-              <div className="flex-grow border-t border-slate-800"></div>
+              <div className="flex-grow border-t border-[var(--color-border)]"></div>
+              <span className="flex-shrink-0 mx-4 text-[var(--color-text-muted)] text-xs">Or continue with</span>
+              <div className="flex-grow border-t border-[var(--color-border)]"></div>
             </div>
 
             {/* Google Sign In Button */}
@@ -174,7 +174,7 @@ export default function LoginPage() {
                 setLoading(false);
               }}
               disabled={loading}
-              className="w-full py-3 bg-slate-800/50 hover:bg-slate-800 border border-slate-700/50 transition-all font-medium text-sm text-slate-200 rounded-xl flex items-center justify-center gap-3 disabled:opacity-50"
+              className="w-full py-3 bg-[var(--color-surface)]/50 hover:bg-[var(--color-surface)] border border-[var(--color-border)] transition-all font-medium text-sm text-[var(--color-text-primary)] rounded-xl flex items-center justify-center gap-3 disabled:opacity-50"
             >
               <svg viewBox="0 0 24 24" className="w-5 h-5">
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -186,7 +186,7 @@ export default function LoginPage() {
             </button>
 
             {/* Toggle Signup Link */}
-            <div className="text-center text-xs text-slate-500 pt-2">
+            <div className="text-center text-xs text-[var(--color-text-muted)] pt-2">
               Don&apos;t have an account?{" "}
               <Link href="/signup" className="text-indigo-400 hover:text-indigo-300 font-medium transition-colors">
                 Create an account

@@ -102,22 +102,22 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans flex flex-col">
+    <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans flex flex-col">
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute top-1/3 right-1/4 w-[400px] h-[400px] bg-purple-500/5 rounded-full blur-[100px] pointer-events-none" />
 
       <Navbar />
 
-      <div className="max-w-6xl w-full mx-auto px-6 py-10 flex-1 flex flex-col space-y-10">
+      <div className="max-w-6xl w-full mx-auto px-4 sm:px-6 py-10 flex-1 flex flex-col space-y-10">
         
         {/* Welcome Banner */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-slate-900/40 border border-slate-800/80 rounded-3xl p-6 backdrop-blur-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-[var(--color-surface-alt)] border border-[var(--color-border)]/80 rounded-3xl p-6 backdrop-blur-sm">
           <div className="space-y-2">
             <span className="text-[10px] font-mono tracking-wider uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full">
               Week 3 Milestone Complete
             </span>
             <h2 className="text-xl font-bold text-white mt-2">VoyagerAI Orchestrator</h2>
-            <p className="text-sm text-slate-400 max-w-xl">
+            <p className="text-sm text-[var(--color-text-secondary)] max-w-xl">
               {user
                 ? "You are signed in! Start orchestrating your travel conversations in the Dashboard."
                 : "Create a mock or real account to start building custom day-by-day itineraries with autonomous agents."}
@@ -126,7 +126,7 @@ export default function Home() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="p-3 rounded-xl bg-slate-800 hover:bg-slate-750 text-slate-300 hover:text-white transition-all border border-slate-700/60"
+              className="p-3 rounded-xl bg-[var(--color-surface)] hover:bg-slate-750 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all border border-[var(--color-border)]"
               title="Ping backend status"
             >
               <RotateCcw className="w-4 h-4" />
@@ -144,20 +144,20 @@ export default function Home() {
 
         {/* Section 1: System Status */}
         <section className="space-y-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+          <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-widest flex items-center gap-2">
             <Activity className="w-4.5 h-4.5 text-indigo-400" />
             System Status
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {/* Backend Gateway */}
-            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+            <div className="bg-[var(--color-surface)]/30 border border-[var(--color-border)]/80 rounded-2xl p-5 flex items-start gap-4">
               <div className="p-3 rounded-xl bg-indigo-500/10 text-indigo-400">
                 <Server className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">FastAPI Gateway</h4>
-                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
+                <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">FastAPI Gateway</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-[var(--color-text-muted)]">Checking...</span>}
                 {pingState.phase === "error" && (
                   <span className="text-xs text-red-400 flex items-center gap-1.5 mt-1 font-semibold">
                     <AlertTriangle className="w-3.5 h-3.5" /> Offline
@@ -172,13 +172,13 @@ export default function Home() {
             </div>
 
             {/* Database Layer */}
-            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+            <div className="bg-[var(--color-surface)]/30 border border-[var(--color-border)]/80 rounded-2xl p-5 flex items-start gap-4">
               <div className="p-3 rounded-xl bg-purple-500/10 text-purple-400">
                 <Database className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Database Connection</h4>
-                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
+                <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Database Connection</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-[var(--color-text-muted)]">Checking...</span>}
                 {pingState.phase === "error" && (
                   <span className="text-xs text-red-400 flex items-center gap-1.5 mt-1 font-semibold">
                     <AlertTriangle className="w-3.5 h-3.5" /> Unreachable
@@ -193,14 +193,14 @@ export default function Home() {
             </div>
 
             {/* API Latency */}
-            <div className="bg-slate-900/30 border border-slate-800/80 rounded-2xl p-5 flex items-start gap-4">
+            <div className="bg-[var(--color-surface)]/30 border border-[var(--color-border)]/80 rounded-2xl p-5 flex items-start gap-4">
               <div className="p-3 rounded-xl bg-teal-500/10 text-teal-400">
                 <Clock className="w-5 h-5" />
               </div>
               <div className="space-y-1">
-                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">API Latency</h4>
-                {pingState.phase === "loading" && <span className="text-xs text-slate-500">Checking...</span>}
-                {pingState.phase === "error" && <span className="text-xs text-slate-500">N/A</span>}
+                <h4 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">API Latency</h4>
+                {pingState.phase === "loading" && <span className="text-xs text-[var(--color-text-muted)]">Checking...</span>}
+                {pingState.phase === "error" && <span className="text-xs text-[var(--color-text-muted)]">N/A</span>}
                 {pingState.phase === "success" && (
                   <span className="text-xs text-teal-400 font-semibold mt-1 block">
                     {pingState.latency} ms
@@ -214,7 +214,7 @@ export default function Home() {
         {/* Section 2: Pipeline Simulator */}
         <section className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+            <h3 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-widest flex items-center gap-2">
               <Compass className="w-4.5 h-4.5 text-indigo-400" />
               Interactive Multi-Agent Simulation
             </h3>
@@ -222,7 +222,7 @@ export default function Home() {
               {simStep > 0 && (
                 <button
                   onClick={resetSimulation}
-                  className="px-3 py-1.5 rounded-lg border border-slate-800 bg-slate-900 hover:bg-slate-850 text-slate-300 hover:text-white text-xs transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-slate-850 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs transition-all flex items-center gap-1.5"
                 >
                   <RotateCcw className="w-3 h-3" /> Reset
                 </button>
@@ -230,7 +230,7 @@ export default function Home() {
               <button
                 onClick={runSimulation}
                 disabled={isSimulating}
-                className="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-950/45 disabled:text-slate-500 disabled:cursor-not-allowed text-xs text-white rounded-lg transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/15"
+                className="px-4 py-1.5 bg-indigo-500 hover:bg-indigo-600 disabled:bg-indigo-950/45 disabled:text-[var(--color-text-muted)] disabled:cursor-not-allowed text-xs text-white rounded-lg transition-all flex items-center gap-1.5 shadow-lg shadow-indigo-500/15"
               >
                 <Play className="w-3 h-3" /> {isSimulating ? "Simulating..." : "Run Offline Simulation"}
               </button>
@@ -240,22 +240,22 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* Visual Agent Steps Grid */}
-            <div className="bg-slate-900/35 border border-slate-850 rounded-3xl p-6 space-y-4">
-              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Execution Flow Nodes</h4>
+            <div className="bg-[var(--color-surface)]/35 border border-slate-850 rounded-3xl p-6 space-y-4">
+              <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">Execution Flow Nodes</h4>
               
               <div className="space-y-4">
                 {/* Node 1 */}
                 <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
-                  simStep >= 1 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                  simStep >= 1 ? "bg-[var(--color-surface-alt)] border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
                 }`}>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    simStep >= 1 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                    simStep >= 1 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                   }`}>
                     01
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-200">Coordinator Agent Node</h5>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    <h5 className="text-xs font-bold text-[var(--color-text-primary)]">Coordinator Agent Node</h5>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">
                       Accepts query, locks graph schema parameters, and boots up sub-agent states.
                     </p>
                   </div>
@@ -263,16 +263,16 @@ export default function Home() {
 
                 {/* Node 2 */}
                 <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
-                  simStep >= 2 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                  simStep >= 2 ? "bg-[var(--color-surface-alt)] border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
                 }`}>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    simStep >= 2 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                    simStep >= 2 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                   }`}>
                     02
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-200">Logistics & Accommodation Nodes</h5>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    <h5 className="text-xs font-bold text-[var(--color-text-primary)]">Logistics & Accommodation Nodes</h5>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">
                       Resolves flights routing schedules and lodging vacancies dynamically.
                     </p>
                   </div>
@@ -280,16 +280,16 @@ export default function Home() {
 
                 {/* Node 3 */}
                 <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
-                  simStep >= 3 ? "bg-slate-900/60 border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                  simStep >= 3 ? "bg-[var(--color-surface-alt)] border-indigo-500/30" : "bg-slate-950/20 border-slate-900/50 opacity-40"
                 }`}>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    simStep >= 3 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-slate-800 text-slate-500"
+                    simStep >= 3 ? "bg-indigo-500/15 text-indigo-400 border border-indigo-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                   }`}>
                     03
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-200">Experiences & Budget Nodes</h5>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    <h5 className="text-xs font-bold text-[var(--color-text-primary)]">Experiences & Budget Nodes</h5>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">
                       Parses sight-seeing activities and runs strict limit calculations.
                     </p>
                   </div>
@@ -297,16 +297,16 @@ export default function Home() {
 
                 {/* Node 4 */}
                 <div className={`p-4 rounded-2xl border transition-all flex items-start gap-4 ${
-                  simStep >= 5 ? "bg-slate-900/60 border-emerald-500/25" : "bg-slate-950/20 border-slate-900/50 opacity-40"
+                  simStep >= 5 ? "bg-[var(--color-surface-alt)] border-emerald-500/25" : "bg-slate-950/20 border-slate-900/50 opacity-40"
                 }`}>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    simStep >= 5 ? "bg-emerald-500/15 text-emerald-450 border border-emerald-500/30" : "bg-slate-800 text-slate-500"
+                    simStep >= 5 ? "bg-emerald-500/15 text-emerald-450 border border-emerald-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                   }`}>
                     04
                   </div>
                   <div>
-                    <h5 className="text-xs font-bold text-slate-200">Final Compilation Node</h5>
-                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                    <h5 className="text-xs font-bold text-[var(--color-text-primary)]">Final Compilation Node</h5>
+                    <p className="text-[11px] text-[var(--color-text-secondary)] mt-1 leading-relaxed">
                       Aggregates metrics and prints the finalized Day-by-Day travel itinerary.
                     </p>
                   </div>
@@ -318,7 +318,7 @@ export default function Home() {
             <div className="flex flex-col space-y-4">
               <div className="bg-slate-950 border border-slate-850 rounded-3xl p-6 flex-1 flex flex-col font-mono relative overflow-hidden min-h-[300px]">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
-                <div className="flex items-center gap-2 text-slate-500 text-[10px] border-b border-slate-900 pb-3 mb-4 select-none">
+                <div className="flex items-center gap-2 text-[var(--color-text-muted)] text-[10px] border-b border-slate-900 pb-3 mb-4 select-none">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/30" />
                   <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/30" />
                   <span className="w-2.5 h-2.5 rounded-full bg-green-500/20 border border-green-500/30" />
@@ -327,7 +327,7 @@ export default function Home() {
 
                 <div className="flex-1 space-y-3 overflow-y-auto text-xs scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
                   {simLog.length === 0 && (
-                    <div className="text-slate-600 italic select-none">Console idle. Hit &quot;Run Offline Simulation&quot; to test graph transitions.</div>
+                    <div className="text-[var(--color-text-muted)] italic select-none">Console idle. Hit &quot;Run Offline Simulation&quot; to test graph transitions.</div>
                   )}
                   {simLog.map((log, index) => (
                     <div key={index} className="flex gap-2">
@@ -341,12 +341,12 @@ export default function Home() {
               </div>
 
               {simStep === 5 && !isSimulating && (
-                <div className="bg-slate-900/50 border border-emerald-500/30 rounded-2xl p-5 animate-fade-in space-y-2">
+                <div className="bg-[var(--color-surface)]/50 border border-emerald-500/30 rounded-2xl p-5 animate-fade-in space-y-2">
                   <div className="flex items-center gap-2 text-emerald-450 text-xs font-semibold">
                     <CheckCircle className="w-4 h-4" /> Itinerary Compiled Successfully!
                   </div>
-                  <div className="text-[11px] text-slate-400 space-y-1 mt-2">
-                    <p className="font-semibold text-slate-300">🗼 Tokyo 4-Day Plan Overview:</p>
+                  <div className="text-[11px] text-[var(--color-text-secondary)] space-y-1 mt-2">
+                    <p className="font-semibold text-[var(--color-text-secondary)]">🗼 Tokyo 4-Day Plan Overview:</p>
                     <p>• Flight: Roundtrip NRT ($580)</p>
                     <p>• Stay: Shibuya Boutique Stay ($260)</p>
                     <p>• Buffer remaining: $360 for shopping & dining</p>
@@ -360,7 +360,7 @@ export default function Home() {
 
       </div>
 
-      <footer className="border-t border-slate-900/60 py-6 text-center text-xs text-slate-600 bg-slate-950/20 mt-12">
+      <footer className="border-t border-slate-900/60 py-6 text-center text-xs text-[var(--color-text-muted)] bg-slate-950/20 mt-12">
         <p>© 2026 VoyagerAI. Autonomous Multi-Agent AI Travel Planner.</p>
       </footer>
     </main>
