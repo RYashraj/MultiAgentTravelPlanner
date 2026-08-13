@@ -21,7 +21,7 @@ from app.repositories import (
     TripRepository,
     UserRepository,
 )
-from app.schemas.trips import MessageCreate, MessageResponse, TripCreate, TripResponse
+from app.schemas.trips import MessageCreate, MessageResponse, TripCreate, TripResponse, TripSaveRequest
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -89,6 +89,20 @@ def delete_trip(
     trip = _owned_trip(trip_id, user, db)
     db.delete(trip)
     db.commit()
+
+
+@router.post("/{trip_id}/save", response_model=TripResponse)
+def save_trip(
+    trip_id: uuid.UUID,
+    payload: TripSaveRequest,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = _owned_trip(trip_id, user, db)
+    trip.is_saved = payload.saved
+    db.commit()
+    db.refresh(trip)
+    return trip
 
 
 @router.get("/{trip_id}/messages", response_model=list[MessageResponse])

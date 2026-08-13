@@ -12,8 +12,13 @@ class TripResponse(BaseModel):
     id: uuid.UUID
     destination: str
     status: str
+    is_saved: bool = False
     created_at: datetime
     model_config = {"from_attributes": True}
+
+
+class TripSaveRequest(BaseModel):
+    saved: bool
 
 
 class MessageCreate(BaseModel):

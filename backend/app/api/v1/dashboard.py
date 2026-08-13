@@ -1,4 +1,4 @@
-﻿"""
+"""
 Dashboard API endpoint.
 
 Returns a single aggregated response for the trip dashboard page.
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from app.agents.budget_agent import compute_budget
 from app.agents.flight_agent import get_flight_options
 from app.agents.hotel_agent import get_hotel_options
+from app.agents.packing_agent import generate_packing_list
 from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.repositories import ItineraryRepository, TripRepository
@@ -188,6 +189,21 @@ def get_dashboard(
             "status": "unavailable",
             "data": None,
             "message": "Could not compute budget breakdown.",
+        }
+
+    # ----------------------------------------------------------------
+    # Section: Packing List
+    # ----------------------------------------------------------------
+    try:
+        weather_d = result.get("weather", {}).get("data")
+        packing_list = generate_packing_list(destination, duration_days, weather_d)
+        result["packing"] = packing_list
+    except Exception as exc:
+        logger.warning("Dashboard: packing list section failed for trip %s: %s", trip_id, exc)
+        result["packing"] = {
+            "status": "partial",
+            "message": "Failed to generate packing list.",
+            "categories": []
         }
 
     return result
