@@ -9,6 +9,7 @@ import { apiFetch, ApiError } from "@/lib/api";
 type Trip = {
   id: string;
   destination: string;
+  is_saved: boolean;
   created_at: string;
 };
 
@@ -18,6 +19,7 @@ function TripsPageContent() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [filterTab, setFilterTab] = useState<"all" | "saved">("all");
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [destination, setDestination] = useState("");
@@ -28,8 +30,10 @@ function TripsPageContent() {
     let cancelled = false;
 
     async function loadTrips() {
+      setIsLoadingTrips(true);
       try {
-        const data = await apiFetch<Trip[]>("/trips");
+        const url = filterTab === "saved" ? "/trips?saved=true" : "/trips";
+        const data = await apiFetch<Trip[]>(url);
         if (!cancelled) setTrips(data);
       } catch (err) {
         // GET /trips ships later in the roadmap — treat "not built yet" as
@@ -52,7 +56,7 @@ function TripsPageContent() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [filterTab]);
 
   const handleCreateTrip = async (e: FormEvent) => {
     e.preventDefault();
@@ -102,6 +106,22 @@ function TripsPageContent() {
     }
   };
 
+  const handleToggleSaveTrip = async (tripId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      const updated = await apiFetch<Trip>(`/trips/${tripId}/save`, { method: "POST" });
+      if (filterTab === "saved" && !updated.is_saved) {
+        setTrips((prev) => prev.filter((t) => t.id !== tripId));
+      } else {
+        setTrips((prev) =>
+          prev.map((t) => (t.id === tripId ? { ...t, is_saved: updated.is_saved } : t))
+        );
+      }
+    } catch (err) {
+      alert("Failed to update save status.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
       <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
@@ -134,6 +154,32 @@ function TripsPageContent() {
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             Plan a new trip
+          </button>
+        </div>
+
+        {/* Filter Tabs */}
+        <div className="flex border-b border-slate-800/80 gap-6 pb-0.5">
+          <button
+            onClick={() => setFilterTab("all")}
+            className={`pb-3 text-sm font-semibold transition-all relative ${
+              filterTab === "all" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            All Trips
+            {filterTab === "all" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setFilterTab("saved")}
+            className={`pb-3 text-sm font-semibold transition-all relative ${
+              filterTab === "saved" ? "text-indigo-400" : "text-slate-400 hover:text-slate-200"
+            }`}
+          >
+            Saved Trips
+            {filterTab === "saved" && (
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-400 rounded-full" />
+            )}
           </button>
         </div>
 
@@ -219,15 +265,42 @@ function TripsPageContent() {
                     </svg>
                   </p>
                   
-                  {/* Delete Button */}
-                  <div
-                    onClick={(e) => handleDeleteTrip(trip.id, e)}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-500/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                    title="Delete Trip"
-                  >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
+                  <div className="flex items-center gap-1.5">
+                    {/* Save/Bookmark Button */}
+                    <div
+                      onClick={(e) => handleToggleSaveTrip(trip.id, e)}
+                      className={`w-8 h-8 rounded-full flex items-center justify-center transition-all ${
+                        trip.is_saved
+                          ? "text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 opacity-100"
+                          : "text-slate-500 hover:bg-slate-500/10 hover:text-slate-300 opacity-0 group-hover:opacity-100"
+                      }`}
+                      title={trip.is_saved ? "Unsave Trip" : "Save Trip"}
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill={trip.is_saved ? "currentColor" : "none"}
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.907c.961 0 1.36 1.246.588 1.81l-3.974 2.89a1 1 0 00-.364 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.88a1 1 0 00-1.176 0l-3.976 2.88c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.364-1.118l-3.97-2.89c-.773-.564-.373-1.81.587-1.81h4.907a1 1 0 00.95-.69l1.519-4.674z"
+                        />
+                      </svg>
+                    </div>
+
+                    {/* Delete Button */}
+                    <div
+                      onClick={(e) => handleDeleteTrip(trip.id, e)}
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-slate-500 hover:bg-red-500/20 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      title="Delete Trip"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
               </button>

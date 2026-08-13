@@ -115,3 +115,9 @@ def auth_headers():
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
