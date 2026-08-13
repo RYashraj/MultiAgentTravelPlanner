@@ -84,19 +84,27 @@ def mock_agent_calls(monkeypatch):
             }
         }
 
+    async def fake_coordinator_ainvoke(state):
+        return fake_coordinator_invoke(state)
+
     def fake_planner_invoke(state):
         return {
             "agent_outputs": {
                 "planner": {
-                    "narrative": "# Test Itinerary\nDay 1: Testing",
+                    "narrative": "# Test Itinerary\nDay 1: Arrival and Sightseeing in the city.\nDay 2: Local dining and museum tour.\nDay 3: Shopping and departure.",
                     "gemini_used": False
                 }
             }
         }
 
+    async def fake_planner_ainvoke(state):
+        return fake_planner_invoke(state)
+
     monkeypatch.setattr(supervisor, "parse_travel_state", fake_parse_state)
     monkeypatch.setattr(coordinator.coordinator_graph, "invoke", fake_coordinator_invoke)
+    monkeypatch.setattr(coordinator.coordinator_graph, "ainvoke", fake_coordinator_ainvoke)
     monkeypatch.setattr(planner.planner_graph, "invoke", fake_planner_invoke)
+    monkeypatch.setattr(planner.planner_graph, "ainvoke", fake_planner_ainvoke)
 
 @pytest.fixture()
 def auth_headers():

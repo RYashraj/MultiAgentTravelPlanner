@@ -57,18 +57,18 @@ export function ItineraryCard({ content, destination, createdAt }: ItineraryCard
       return (
         <div key={idx} className="flex items-start gap-2 ml-2 my-1">
           <div className="mt-2 w-1 h-1 rounded-full bg-indigo-400/60 shrink-0" />
-          <p className="text-xs text-slate-300 leading-relaxed">{parseInlineStyle(line.substring(2))}</p>
+          <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{parseInlineStyle(line.substring(2))}</p>
         </div>
       );
     }
     if (line.trim() === '') return <div key={idx} className="h-1" />;
     return (
-      <p key={idx} className="text-xs text-slate-300 leading-relaxed">{parseInlineStyle(line)}</p>
+      <p key={idx} className="text-xs text-[var(--color-text-secondary)] leading-relaxed">{parseInlineStyle(line)}</p>
     );
   };
 
   return (
-    <div className="bg-slate-900/60 border border-slate-700/50 rounded-2xl overflow-hidden">
+    <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
@@ -80,16 +80,16 @@ export function ItineraryCard({ content, destination, createdAt }: ItineraryCard
           <div className="text-left">
             <p className="text-sm font-semibold text-white">Full Itinerary — {destination}</p>
             {createdAt && (
-              <p className="text-[10px] text-slate-500">
+              <p className="text-[10px] text-[var(--color-text-muted)]">
                 Generated {new Date(createdAt).toLocaleDateString()}
               </p>
             )}
           </div>
         </div>
         {expanded ? (
-          <ChevronUp className="w-4 h-4 text-slate-400" />
+          <ChevronUp className="w-4 h-4 text-[var(--color-text-secondary)]" />
         ) : (
-          <ChevronDown className="w-4 h-4 text-slate-400" />
+          <ChevronDown className="w-4 h-4 text-[var(--color-text-secondary)]" />
         )}
       </button>
 

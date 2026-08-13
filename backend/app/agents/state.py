@@ -1,5 +1,5 @@
 """Shared LangGraph state definition for Travel Planner agents."""
-from typing import Annotated, TypedDict
+from typing_extensions import Annotated, TypedDict
 
 
 def merge_agent_outputs(left: dict[str, dict] | None, right: dict[str, dict] | None) -> dict[str, dict]:
@@ -10,7 +10,7 @@ def merge_agent_outputs(left: dict[str, dict] | None, right: dict[str, dict] | N
     return res
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     trip_id: str
     origin: str | None
     destination: str
