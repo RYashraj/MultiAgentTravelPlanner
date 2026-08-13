@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     google_places_api_key: str = ""
     amadeus_api_key: str = ""
     amadeus_api_secret: str = ""
+    sentry_dsn: str | None = None
 
     @property
     def cors_origins_list(self) -> list[str]:

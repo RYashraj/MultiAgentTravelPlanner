@@ -22,6 +22,7 @@ from app.repositories import (
     UserRepository,
 )
 from app.schemas.trips import MessageCreate, MessageResponse, TripCreate, TripResponse, TripSaveRequest
+from app.core.rate_limit import rate_limit
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])
@@ -53,7 +54,7 @@ def _embed_message_best_effort(trip_id: uuid.UUID, message_id: uuid.UUID, role: 
 # CRUD routes
 # ---------------------------------------------------------------------------
 
-@router.post("", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=TripResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(requests=10, window_seconds=60))])
 def create_trip(
     payload: TripCreate,
     user: CurrentUser = Depends(get_current_user),
@@ -154,7 +155,7 @@ def get_itinerary(
 # Message endpoint — delegates to SupervisorAgent
 # ---------------------------------------------------------------------------
 
-@router.post("/{trip_id}/messages")
+@router.post("/{trip_id}/messages", dependencies=[Depends(rate_limit(requests=5, window_seconds=60))])
 async def send_message(
     trip_id: uuid.UUID,
     payload: MessageCreate,

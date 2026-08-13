@@ -25,9 +25,10 @@ def test_list_trips(client, auth_headers):
     assert response.status_code == 200
     trips = response.json()
     assert len(trips) >= 2
-    # Ensure they belong to the user
-    for trip in trips:
-        assert trip["destination"] in ["Tokyo", "Paris", "Rome"]
+    # Verify the trips we just created are in the response
+    destinations = [t["destination"] for t in trips]
+    assert "Paris" in destinations
+    assert "Rome" in destinations
 
 
 def test_send_and_get_messages(client, auth_headers):

@@ -1,0 +1,82 @@
+name: Security Audit
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Run every Monday at 09:00 UTC
+    - cron: "0 9 * * 1"
+
+jobs:
+  python-audit:
+    name: Python Dependency Audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit on backend requirements
+        working-directory: backend
+        run: pip-audit -r requirements.txt --output json > pip-audit-report.json || true
+
+      - name: Display pip-audit results
+        working-directory: backend
+        run: |
+          pip-audit -r requirements.txt || echo "::warning:: pip-audit found vulnerabilities — see report artifact"
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: backend/pip-audit-report.json
+
+  npm-audit:
+    name: Node.js Dependency Audit (npm audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Run npm audit (frontend)
+        working-directory: frontend
+        run: |
+          npm audit --audit-level=high --json > npm-audit-report.json || true
+          npm audit --audit-level=high || echo "::warning:: npm audit found high-severity vulnerabilities"
+
+      - name: Upload npm-audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: npm-audit-report
+          path: frontend/npm-audit-report.json
+
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify .env files are not committed
+        run: |
+          if git ls-files | grep -qE '^(backend|frontend)/\.env$'; then
+            echo "::error:: .env files are committed to the repository!"
+            exit 1
+          else
+            echo ".env files are correctly excluded from version control."
+          fi
