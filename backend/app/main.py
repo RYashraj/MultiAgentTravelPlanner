@@ -128,10 +128,13 @@ async def custom_redoc():
     )
 
 
+from app.api.v1 import admin, auth, dashboard, health, trips
+
 app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(trips.router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard.router, prefix=settings.api_v1_prefix)
 app.include_router(auth.router, prefix=settings.api_v1_prefix)
+app.include_router(admin.router, prefix=settings.api_v1_prefix)
 
 
 @app.get("/")

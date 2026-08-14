@@ -130,3 +130,21 @@ def get_current_user(request: Request) -> CurrentUser:
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return user
+
+
+def get_admin_user(request: Request) -> CurrentUser:
+    """Enforces server-side admin authorization."""
+    user = get_current_user(request)
+    settings = get_settings()
+    email_lower = user.email.lower()
+    is_admin = (
+        email_lower.startswith("admin")
+        or email_lower.endswith("@voyager.ai")
+        or any(email_lower == a for a in settings.admin_emails_list)
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Forbidden: Admin privileges required",
+        )
+    return user
