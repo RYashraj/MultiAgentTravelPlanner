@@ -114,7 +114,7 @@ export default function Home() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 bg-[var(--color-surface-alt)] border border-[var(--color-border)]/80 rounded-3xl p-6 backdrop-blur-sm">
           <div className="space-y-2">
             <span className="text-[10px] font-mono tracking-wider uppercase bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 px-3 py-1 rounded-full">
-              Week 3 Milestone Complete
+              v0.9 Feature-Complete MVP
             </span>
             <h2 className="text-xl font-bold text-white mt-2">VoyagerAI Orchestrator</h2>
             <p className="text-sm text-[var(--color-text-secondary)] max-w-xl">
