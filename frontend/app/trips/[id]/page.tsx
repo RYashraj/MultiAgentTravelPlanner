@@ -46,7 +46,7 @@ function renderMarkdown(content: string) {
           return (
             <div key={idx} className="flex items-start gap-3 ml-2 my-1.5 group">
               <div className="mt-1.5 w-1.5 h-1.5 rounded-full bg-indigo-400/50 group-hover:bg-indigo-400 transition-colors shrink-0" />
-              <p className="text-sm text-slate-300 leading-relaxed flex-1">
+              <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed flex-1">
                 {parseInlineStyle(listText)}
               </p>
             </div>
@@ -60,7 +60,7 @@ function renderMarkdown(content: string) {
         
         // Regular paragraphs
         return (
-          <p key={idx} className="text-sm text-slate-300 leading-relaxed">
+          <p key={idx} className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
             {parseInlineStyle(line)}
           </p>
         );
@@ -345,25 +345,25 @@ function ChatPageContent() {
   ];
 
   return (
-    <main className="h-screen overflow-hidden bg-[#0b0f19] text-slate-100 font-sans flex flex-col">
+    <main className="h-screen overflow-hidden bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans flex flex-col">
       <Navbar />
 
-      <div className="max-w-7xl w-full mx-auto px-6 py-6 flex-1 flex flex-col space-y-4 overflow-hidden">
+      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col space-y-4 overflow-hidden">
         
         {/* Navigation / Header */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-3 min-w-0">
             <Link
               href="/trips"
-              className="w-9 h-9 rounded-xl bg-slate-900 border border-slate-800/80 flex items-center justify-center text-slate-400 hover:text-white hover:border-slate-700 transition-all"
+              className="w-9 h-9 shrink-0 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)]/80 flex items-center justify-center text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] hover:border-[var(--color-border)] transition-all"
             >
               <ChevronLeft className="w-5 h-5" />
             </Link>
-            <div>
-              <h2 className="text-md font-bold text-white">
+            <div className="min-w-0">
+              <h2 className="text-md font-bold text-white truncate">
                 {trip ? `Trip to ${trip.destination}` : "Planning Workspace"}
               </h2>
-              <p className="text-[10px] text-slate-500 font-mono">ID: {tripId}</p>
+              <p className="text-[10px] text-[var(--color-text-muted)] font-mono truncate">ID: {tripId}</p>
             </div>
           </div>
         </div>
@@ -377,13 +377,13 @@ function ChatPageContent() {
           <div className="flex-1 min-h-0 flex flex-col items-stretch">
             
             {/* Interactive Workspace */}
-            <div className="flex-1 flex flex-col min-h-0 border border-slate-700/60 bg-[#0c101a]/70 rounded-[2rem] overflow-hidden backdrop-blur-xl shadow-2xl shadow-indigo-900/20 relative group">
+            <div className="flex-1 flex flex-col min-h-0 border border-[var(--color-border)] bg-[#0c101a]/70 rounded-[2rem] overflow-hidden backdrop-blur-xl shadow-2xl shadow-indigo-900/20 relative group">
               <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/5 to-transparent pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
               
               {/* Pipeline Stepper (Always Visible at Top) */}
-              <div className="bg-slate-950/40 border-b border-slate-700/50 p-4 shrink-0 select-none">
+              <div className="bg-[var(--color-surface-alt)] border-b border-[var(--color-border)] p-4 shrink-0 select-none">
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 font-sans">
+                  <h4 className="text-[10px] font-bold text-[var(--color-text-secondary)] uppercase tracking-wider flex items-center gap-1.5 font-sans">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
                     Live Agent Orchestration Pipeline
                   </h4>
@@ -393,7 +393,7 @@ function ChatPageContent() {
                     </span>
                   )}
                 </div>
-                <div className="grid grid-cols-5 gap-2 relative">
+                <div className="grid grid-cols-5 gap-1 sm:gap-2 relative min-w-[280px] overflow-x-auto">
                   {steps.map((step, idx) => {
                     const status = getStepStatus(step.key);
                     const Icon = step.icon;
@@ -402,7 +402,7 @@ function ChatPageContent() {
                       <div key={step.key} className="flex flex-col items-center text-center relative group">
                         {idx < steps.length - 1 && (
                           <div className={`absolute top-3 left-[60%] right-[-40%] h-[1.5px] z-0 transition-colors duration-500 ${
-                            status === "completed" ? "bg-emerald-500/50" : "bg-slate-800"
+                            status === "completed" ? "bg-emerald-500/50" : "bg-[var(--color-surface)]"
                           }`} />
                         )}
                         
@@ -417,7 +417,7 @@ function ChatPageContent() {
                         </div>
                         
                         <span className={`text-[8px] font-bold mt-1.5 transition-colors duration-300 font-sans ${
-                          status === "completed" ? "text-emerald-400" : status === "active" ? "text-indigo-400" : "text-slate-500"
+                          status === "completed" ? "text-emerald-400" : status === "active" ? "text-indigo-400" : "text-[var(--color-text-muted)]"
                         }`}>
                           {step.name}
                         </span>
@@ -433,15 +433,15 @@ function ChatPageContent() {
                   <div className="space-y-4">
                     {isLoadingHistory ? (
                       <div className="space-y-3">
-                        <div className="h-16 w-3/4 rounded-2xl bg-slate-800/40 animate-pulse" />
-                        <div className="h-20 w-1/2 rounded-2xl bg-slate-800/40 animate-pulse" />
+                        <div className="h-16 w-3/4 rounded-2xl bg-[var(--color-surface)]/40 animate-pulse" />
+                        <div className="h-20 w-1/2 rounded-2xl bg-[var(--color-surface)]/40 animate-pulse" />
                       </div>
                     ) : messages.length === 0 ? (
                       <div className="h-full flex flex-col items-center justify-center text-center py-16">
                         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/30 mb-4 animate-bounce">
                           <Compass className="w-6 h-6 text-white" />
                         </div>
-                        <p className="text-sm text-slate-400 max-w-xs leading-relaxed">
+                        <p className="text-sm text-[var(--color-text-secondary)] max-w-xs leading-relaxed">
                           Say hi to your crew! Tell them where you want to go, your dates, or what budget constraints you have.
                         </p>
                       </div>
@@ -459,7 +459,7 @@ function ChatPageContent() {
                               className={`rounded-3xl px-7 py-5 text-[15px] leading-relaxed relative ${
                                 isUser
                                   ? "bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-lg shadow-indigo-500/25 rounded-tr-sm"
-                                  : "bg-white/5 backdrop-blur-xl border border-white/10 text-slate-100 shadow-xl rounded-tl-sm"
+                                  : "bg-white/5 backdrop-blur-xl border border-white/10 text-[var(--color-text-primary)] shadow-xl rounded-tl-sm"
                               }`}
                             >
                               {!isUser && (
@@ -490,7 +490,7 @@ function ChatPageContent() {
               {/* Form Input Area */}
               <form
                 onSubmit={handleSend}
-                className="border-t border-slate-700/50 p-5 bg-slate-900/80 backdrop-blur-xl flex items-end gap-3 shrink-0 relative z-10"
+                className="border-t border-[var(--color-border)] p-5 bg-[var(--color-surface)]/80 backdrop-blur-xl flex items-end gap-3 shrink-0 relative z-10"
               >
                 <textarea
                   value={inputMessage}
@@ -503,7 +503,7 @@ function ChatPageContent() {
                   }}
                   placeholder="Tell your planning agents about your trip details..."
                   rows={1}
-                  className="flex-1 resize-none bg-slate-950/50 border border-slate-700/60 rounded-[1.25rem] px-5 py-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500/70 transition-all duration-300 max-h-32 font-sans shadow-inner shadow-black/40"
+                  className="flex-1 resize-none bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-[1.25rem] px-5 py-3.5 text-sm text-[var(--color-text-primary)] placeholder:text-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-indigo-500/70 focus:border-indigo-500/70 transition-all duration-300 max-h-32 font-sans shadow-inner shadow-black/40"
                 />
                 <button
                   type="submit"

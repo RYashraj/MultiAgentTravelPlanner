@@ -53,15 +53,15 @@ export default function AuthCallbackPage() {
   }, [router]);
 
   return (
-    <main className="h-screen bg-[#0b0f19] flex items-center justify-center">
+    <main className="h-screen bg-[var(--color-bg)] flex items-center justify-center">
       <div className="text-center space-y-4">
         <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center mx-auto shadow-lg shadow-indigo-500/30 animate-pulse">
           <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
         </div>
-        <p className="text-slate-300 text-sm font-medium">Confirming your account…</p>
-        <p className="text-slate-500 text-xs">You&apos;ll be redirected in a moment.</p>
+        <p className="text-[var(--color-text-secondary)] text-sm font-medium">Confirming your account…</p>
+        <p className="text-[var(--color-text-muted)] text-xs">You&apos;ll be redirected in a moment.</p>
       </div>
     </main>
   );
