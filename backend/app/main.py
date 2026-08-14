@@ -78,9 +78,25 @@ app = FastAPI(
 
 setup_exception_handlers(app)
 
+# ---------------------------------------------------------------------------
+# Middleware stack — Starlette processes middleware in REVERSE registration
+# order: the LAST add_middleware call becomes the OUTERMOST layer.
+#
+# Desired runtime flow:
+#   CORS → StructuredLogging/RequestID → RateLimiter → SupabaseJWT → routes
+#
+# Therefore registration order (innermost first → outermost last):
+#   1. SupabaseJWTMiddleware  (innermost — runs last, closest to routes)
+#   2. RateLimiterMiddleware
+#   3. StructuredLoggingMiddleware  (runs before rate-limit and auth)
+#   4. CORSMiddleware  (outermost — first to see every request)
+#
+# This guarantees X-Request-ID is set BEFORE RateLimiter or Auth can
+# short-circuit, so 401 / 403 / 422 / 429 / 500 all carry the header.
+# ---------------------------------------------------------------------------
+app.add_middleware(SupabaseJWTMiddleware)
 app.add_middleware(RateLimiterMiddleware)
 app.add_middleware(StructuredLoggingMiddleware)
-app.add_middleware(SupabaseJWTMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
