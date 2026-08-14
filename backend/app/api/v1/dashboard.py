@@ -279,4 +279,27 @@ async def get_dashboard(
             "message": "Could not generate packing list."
         }
 
+    # ----------------------------------------------------------------
+    # Section: Transport & Food (Member C Stretch Agents)
+    # ----------------------------------------------------------------
+    try:
+        from app.agents.transport_agent import get_transport_options
+        from app.agents.food_agent import get_food_recommendations
+
+        transport_opts = await asyncio.to_thread(get_transport_options, destination, origin, budget_str, duration_days)
+        result["transport"] = {
+            "status": "ok" if transport_opts.get("found") else "unavailable",
+            "data": transport_opts,
+        }
+
+        food_opts = await asyncio.to_thread(get_food_recommendations, destination, budget_str, duration_days)
+        result["food"] = {
+            "status": "ok" if food_opts.get("found") else "unavailable",
+            "data": food_opts,
+        }
+    except Exception as exc:
+        logger.warning("Dashboard: transport/food sections failed for trip %s: %s", trip_id, exc)
+        result["transport"] = {"status": "unavailable", "data": None, "message": "Could not load transport options."}
+        result["food"] = {"status": "unavailable", "data": None, "message": "Could not load food recommendations."}
+
     return result

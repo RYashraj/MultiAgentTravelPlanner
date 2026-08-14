@@ -34,11 +34,13 @@ from sqlalchemy.orm import Session
 from app.agents.budget_agent import compute_budget
 from app.agents.coordinator import coordinator_graph
 from app.agents.flight_agent import get_flight_options
+from app.agents.food_agent import get_food_recommendations
 from app.agents.gemini_client import call_gemini_async
 from app.agents.hotel_agent import get_hotel_options
 from app.agents.parser import parse_travel_state
 from app.agents.planner import planner_graph
 from app.agents.state import AgentState
+from app.agents.transport_agent import get_transport_options
 from app.db.models import Itinerary
 from app.repositories import (
     AgentRunRepository,
@@ -253,12 +255,30 @@ class SupervisorAgent:
                 logger.exception("AttractionAgent run failed")
                 return {"summary": f"Explore top attractions and cultural sights in {destination}."}
 
-        # Run all 4 agents in parallel
-        flight_data, hotel_data, weather_data, attractions_data = await asyncio.gather(
+        async def _run_transport() -> dict:
+            try:
+                data = await asyncio.to_thread(get_transport_options, destination, origin, budget, duration_days, preferences)
+                return data
+            except Exception:
+                logger.exception("TransportAgent parallel run failed")
+                return {"found": False, "reason": "Agent error", "destination": destination, "source": "error"}
+
+        async def _run_food() -> dict:
+            try:
+                data = await asyncio.to_thread(get_food_recommendations, destination, budget, duration_days, preferences)
+                return data
+            except Exception:
+                logger.exception("FoodAgent parallel run failed")
+                return {"found": False, "reason": "Agent error", "destination": destination, "source": "error"}
+
+        # Run all parallel agents concurrently
+        flight_data, hotel_data, weather_data, attractions_data, transport_data, food_data = await asyncio.gather(
             _run_flight(),
             _run_hotel(),
             _run_weather(),
             _run_attractions(),
+            _run_transport(),
+            _run_food(),
         )
 
         # Log parallel agent results
@@ -293,6 +313,8 @@ class SupervisorAgent:
         current_outputs["hotel"] = hotel_data
         current_outputs["weather"] = weather_data
         current_outputs["attractions"] = attractions_data
+        current_outputs["transport"] = transport_data
+        current_outputs["food"] = food_data
 
         # ================================================================
         # Step 3: Budget Agent (needs flight + hotel data — sequential)
