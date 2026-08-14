@@ -8,8 +8,8 @@ from app.db.models import AgentRun
 
 class AgentRunRepository:
     def __init__(self, db: Session): self.db = db
-    def start(self, trip_id: uuid.UUID, input_payload: dict) -> AgentRun:
-        run = AgentRun(trip_id=trip_id, agent_name="CoordinatorAgent", status="running", input_payload=input_payload)
+    def start(self, trip_id: uuid.UUID, input_payload: dict, agent_name: str = "supervisor") -> AgentRun:
+        run = AgentRun(trip_id=trip_id, agent_name=agent_name, status="running", input_payload=input_payload)
         self.db.add(run); self.db.commit(); self.db.refresh(run)
         return run
     def complete(self, run: AgentRun, output_payload: dict) -> AgentRun:

@@ -12,6 +12,7 @@ class TripResponse(BaseModel):
     id: uuid.UUID
     destination: str
     status: str
+    is_saved: bool
     created_at: datetime
     model_config = {"from_attributes": True}
 

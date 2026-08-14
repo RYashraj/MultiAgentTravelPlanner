@@ -284,6 +284,7 @@ function ChatPageContent() {
                 setItineraryGenerated(true);
               }
               setActiveAgent(null);
+              apiFetch<Trip>(`/trips/${tripId}`).then((t) => setTrip(t)).catch(() => {});
             } else if (resolvedType === "agent_log") {
               setActiveLogs((prev) => [...prev, `[${data.agent}] ${data.content}`]);
               setActiveAgent(data.agent);
@@ -317,6 +318,7 @@ function ChatPageContent() {
       setMessages((prev) => prev.filter((m) => m.id !== assistantMsgId));
     } finally {
       setIsSending(false);
+      apiFetch<Trip>(`/trips/${tripId}`).then((t) => setTrip(t)).catch(() => {});
     }
   };
 

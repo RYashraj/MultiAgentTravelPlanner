@@ -94,6 +94,19 @@ MOCK_PLACES_DB = {
         {"name": "Khaosan Tokyo Hostel (Budget)", "type": "hotel", "budget_type": "budget", "rating": 4.1, "description": "Budget hostel in Asakusa. Dorm ¥2,500–₹3,500/night. Great location near Senso-ji."},
         {"name": "Park Hyatt Tokyo (Luxury)", "type": "hotel", "budget_type": "luxury", "rating": 4.8, "description": "Luxury hotel from 'Lost in Translation'. Rooms ¥65,000+/night."},
     ],
+
+    "Meerut": [
+        {"name": "Subhash Bazar & Ghantaghar Cloth Market", "type": "shopping", "rating": 4.6, "description": "Famous wholesale & retail cloth bazaar operating specifically on Thursdays and Saturdays. Sarees, fabric rolls, ethnic wear, and streetwear at 40-60% off."},
+        {"name": "Abu Lane", "type": "shopping", "rating": 4.5, "description": "Meerut's premier high-street fashion and branded clothing market. Open Sundays, weekly off on Tuesdays."},
+        {"name": "Sadar Bazaar & Shastri Nagar Market", "type": "shopping", "rating": 4.3, "description": "Bustling evening market for trendy streetwear, accessories, footwear, and local street snacks."},
+        {"name": "Augarnath Temple (Kali Paltan Mandir)", "type": "attraction", "rating": 4.7, "description": "Historic temple linked to the 1857 Indian rebellion. Free entry."},
+        {"name": "St. John's Church", "type": "attraction", "rating": 4.5, "description": "One of the oldest churches in North India built in 1819."},
+        {"name": "Suraj Kund Park", "type": "attraction", "rating": 4.2, "description": "Historic pond and peaceful green garden in the city center. Free entry."},
+        {"name": "Marwari Bhojnalaya", "type": "restaurant", "rating": 4.5, "description": "Iconic traditional thali and North Indian vegetarian meal. Meal ₹150–₹300."},
+        {"name": "Hari Vada Pav & Chaat (Sadar Bazaar)", "type": "restaurant", "rating": 4.6, "description": "Famous street food and chaat stall. Snacks ₹50–₹120."},
+        {"name": "Hotel Crystal Palace (Budget)", "type": "hotel", "budget_type": "budget", "rating": 4.0, "description": "Clean budget stay in Meerut city center. Rooms ₹1,200–₹2,500/night."},
+        {"name": "Bravura Gold Resort (Mid-Range)", "type": "hotel", "budget_type": "midrange", "rating": 4.3, "description": "Mid-range resort with pool and restaurants. Rooms ₹3,500–₹6,000/night."},
+    ],
 }
 
 # ─────────────────────────────────────────────────────────────────

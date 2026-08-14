@@ -22,6 +22,8 @@ import {
   Cloud,
   DollarSign,
   BedDouble,
+  Briefcase,
+  Bookmark,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -40,6 +42,7 @@ interface DashboardData {
   trip_id: string;
   destination: string;
   trip_status: string;
+  is_saved: boolean;
   itinerary: {
     status: SectionStatus;
     content?: string;
@@ -51,6 +54,7 @@ interface DashboardData {
   weather: DashboardSection;
   attractions: DashboardSection;
   budget: DashboardSection;
+  packing_list: DashboardSection;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -303,6 +307,74 @@ function BudgetSec({ s }: { s: DashboardSection }) {
   );
 }
 
+function PackingListSec({ s, tripId }: { s: DashboardSection; tripId: string }) {
+  const [checkedItems, setCheckedItems] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`voyager_packing_${tripId}`);
+      if (saved) {
+        setCheckedItems(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, [tripId]);
+
+  if (s.status === "unavailable" || !s.data || !s.data.items) {
+    return <Unavail msg={s.message || "Packing list data unavailable."} />;
+  }
+
+  const { destination_type, duration_days, items } = s.data;
+
+  const handleToggle = (item: string) => {
+    const updated = { ...checkedItems, [item]: !checkedItems[item] };
+    setCheckedItems(updated);
+    try {
+      localStorage.setItem(`voyager_packing_${tripId}`, JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        <span className="text-[10px] font-semibold text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-full px-2 py-0.5 capitalize">
+          Type: {destination_type}
+        </span>
+        <span className="text-[10px] font-semibold text-teal-300 bg-teal-500/10 border border-teal-500/20 rounded-full px-2 py-0.5">
+          Duration: {duration_days} days
+        </span>
+      </div>
+      <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+        {items.map((item: string, idx: number) => {
+          const isChecked = !!checkedItems[item];
+          return (
+            <label
+              key={idx}
+              className="flex items-center gap-3 bg-slate-850/20 hover:bg-slate-800/40 rounded-xl px-3 py-2 cursor-pointer border border-transparent hover:border-slate-800 transition-all select-none group"
+            >
+              <input
+                type="checkbox"
+                checked={isChecked}
+                onChange={() => handleToggle(item)}
+                className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-500 focus:ring-indigo-500/30 accent-indigo-500 cursor-pointer"
+              />
+              <span className={`text-xs text-slate-300 transition-all ${
+                isChecked ? "line-through text-slate-500" : "group-hover:text-slate-100"
+              }`}>
+                {item}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 function DashboardContent() {
@@ -311,12 +383,16 @@ function DashboardContent() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     apiFetch<DashboardData>(`/trips/${tripId}/dashboard`)
       .then((d) => {
-        if (!cancelled) setDashboard(d);
+        if (!cancelled) {
+          setDashboard(d);
+          setIsSaved(d.is_saved);
+        }
       })
       .catch((e) => {
         if (!cancelled) setError(e instanceof Error ? e.message : "Could not load dashboard.");
@@ -328,6 +404,15 @@ function DashboardContent() {
       cancelled = true;
     };
   }, [tripId]);
+
+  const handleToggleSave = async () => {
+    try {
+      const res = await apiFetch<{ is_saved: boolean }>(`/trips/${tripId}/save`, { method: "POST" });
+      setIsSaved(res.is_saved);
+    } catch (err) {
+      alert("Failed to toggle save status.");
+    }
+  };
 
   return (
     <main className="min-h-screen bg-[#0b0f19] text-slate-100 font-sans">
@@ -351,8 +436,23 @@ function DashboardContent() {
             </p>
           </div>
           {!isLoading && (
-            <div className="ml-auto flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1">
-              <Sparkles className="w-3 h-3" /> v0.2-full-mvp
+            <div className="ml-auto flex items-center gap-3">
+              {dashboard && (
+                <button
+                  onClick={handleToggleSave}
+                  className={`px-4 py-2 border rounded-xl flex items-center gap-2 text-xs font-semibold transition-all ${
+                    isSaved
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                      : "bg-slate-900 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700"
+                  }`}
+                >
+                  <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-current" : ""}`} />
+                  {isSaved ? "Saved" : "Save Trip"}
+                </button>
+              )}
+              <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1">
+                <Sparkles className="w-3 h-3" /> v0.2-full-mvp
+              </div>
             </div>
           )}
         </div>
@@ -422,6 +522,10 @@ function DashboardContent() {
 
               <SectionCard icon={MapPin} title="Top Attractions" status={dashboard.attractions.status} color="emerald">
                 <AttrSec s={dashboard.attractions} />
+              </SectionCard>
+
+              <SectionCard icon={Briefcase} title="Packing List" status={dashboard.packing_list?.status || "unavailable"} color="teal">
+                <PackingListSec s={dashboard.packing_list} tripId={tripId} />
               </SectionCard>
 
               <div className="lg:col-span-2">
