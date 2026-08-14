@@ -62,6 +62,7 @@ async def lifespan(app: FastAPI):
 
 from app.core.exceptions import setup_exception_handlers
 from app.core.logging import StructuredLoggingMiddleware, setup_sentry, setup_structured_logging
+from app.core.rate_limiter import RateLimiterMiddleware
 
 setup_structured_logging()
 setup_sentry()
@@ -77,6 +78,7 @@ app = FastAPI(
 
 setup_exception_handlers(app)
 
+app.add_middleware(RateLimiterMiddleware)
 app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(SupabaseJWTMiddleware)
 

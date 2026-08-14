@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     sentry_dsn: str = ""
     log_level: str = "INFO"
 
+    rate_limiting_enabled: bool = True
+    rate_limit_auth_rpm: int = 10
+    rate_limit_message_rpm: int = 20
+    rate_limit_general_rpm: int = 120
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
