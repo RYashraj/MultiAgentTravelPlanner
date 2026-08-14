@@ -60,6 +60,8 @@ async def lifespan(app: FastAPI):
     yield
 
 
+from app.core.exceptions import setup_exception_handlers
+
 app = FastAPI(
     title="VoyagerAI API",
     description="Autonomous multi-agent AI travel planner — backend service",
@@ -68,6 +70,8 @@ app = FastAPI(
     docs_url=None,
     redoc_url=None,
 )
+
+setup_exception_handlers(app)
 
 app.add_middleware(SupabaseJWTMiddleware)
 
