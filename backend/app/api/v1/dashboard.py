@@ -98,6 +98,7 @@ async def get_dashboard(
         "trip_id": str(trip_id),
         "destination": destination,
         "trip_status": trip.status,
+        "is_saved": trip.is_saved,
     }
 
     # Fetch messages once — reused across all sections
@@ -231,5 +232,74 @@ async def get_dashboard(
             "data": None,
             "message": "Could not compute budget breakdown.",
         }
+
+    # ----------------------------------------------------------------
+    # Section: Packing List
+    # ----------------------------------------------------------------
+    try:
+        from app.agents.parser import parse_travel_state
+        travel_params = await parse_travel_state(messages, destination)
+        p_duration = travel_params.get("duration_days") or duration_days or 3
+        p_goal = travel_params.get("goal")
+        p_prefs = travel_params.get("preferences") or []
+
+        # Determine destination type: beach, adventure, or city
+        destination_type = "city"
+        dest_lower = destination.lower()
+        goal_lower = (p_goal or "").lower()
+        prefs_lower = [p.lower() for p in p_prefs]
+
+        beach_keywords = {"beach", "beaches", "sea", "ocean", "island", "maldives", "goa", "bali", "hawaii", "phuket", "bahamas"}
+        adventure_keywords = {"adventure", "hiking", "trekking", "mountain", "climbing", "camping", "wildlife", "safari", "nature", "forest", "national park"}
+
+        if any(kw in dest_lower for kw in beach_keywords) or "beach" in goal_lower or "beach" in prefs_lower:
+            destination_type = "beach"
+        elif any(kw in dest_lower for kw in adventure_keywords) or any(kw in goal_lower for kw in adventure_keywords) or any(p in adventure_keywords for p in prefs_lower):
+            destination_type = "adventure"
+
+        weather_cond = weather_data.get("condition", "Pleasant")
+
+        from app.tools.packing import generate_packing_list
+        packing_items = generate_packing_list(weather_cond, p_duration, destination_type)
+
+        result["packing_list"] = {
+            "status": "ok",
+            "data": {
+                "destination_type": destination_type,
+                "duration_days": p_duration,
+                "weather_condition": weather_cond,
+                "items": packing_items
+            }
+        }
+    except Exception as exc:
+        logger.warning("Dashboard: packing list section failed for trip %s: %s", trip_id, exc)
+        result["packing_list"] = {
+            "status": "unavailable",
+            "data": None,
+            "message": "Could not generate packing list."
+        }
+
+    # ----------------------------------------------------------------
+    # Section: Transport & Food (Member C Stretch Agents)
+    # ----------------------------------------------------------------
+    try:
+        from app.agents.transport_agent import get_transport_options
+        from app.agents.food_agent import get_food_recommendations
+
+        transport_opts = await asyncio.to_thread(get_transport_options, destination, origin, budget_str, duration_days)
+        result["transport"] = {
+            "status": "ok" if transport_opts.get("found") else "unavailable",
+            "data": transport_opts,
+        }
+
+        food_opts = await asyncio.to_thread(get_food_recommendations, destination, budget_str, duration_days)
+        result["food"] = {
+            "status": "ok" if food_opts.get("found") else "unavailable",
+            "data": food_opts,
+        }
+    except Exception as exc:
+        logger.warning("Dashboard: transport/food sections failed for trip %s: %s", trip_id, exc)
+        result["transport"] = {"status": "unavailable", "data": None, "message": "Could not load transport options."}
+        result["food"] = {"status": "unavailable", "data": None, "message": "Could not load food recommendations."}
 
     return result

@@ -32,6 +32,20 @@ class Settings(BaseSettings):
     amadeus_api_key: str = ""
     amadeus_api_secret: str = ""
 
+    sentry_dsn: str = ""
+    log_level: str = "INFO"
+
+    rate_limiting_enabled: bool = True
+    rate_limit_auth_rpm: int = 10
+    rate_limit_message_rpm: int = 20
+    rate_limit_general_rpm: int = 120
+
+    admin_emails: str = "admin@example.com,admin@voyager.ai"
+
+    @property
+    def admin_emails_list(self) -> list[str]:
+        return [email.strip().lower() for email in self.admin_emails.split(",") if email.strip()]
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]

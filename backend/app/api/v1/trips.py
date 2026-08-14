@@ -65,10 +65,24 @@ def create_trip(
 
 @router.get("", response_model=list[TripResponse])
 def list_trips(
+    saved: bool | None = None,
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return TripRepository(db).list_for_user(user.id)
+    return TripRepository(db).list_for_user(user.id, saved=saved)
+
+
+@router.post("/{trip_id}/save", response_model=TripResponse)
+def save_trip(
+    trip_id: uuid.UUID,
+    user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    trip = _owned_trip(trip_id, user, db)
+    trip.is_saved = not trip.is_saved
+    db.commit()
+    db.refresh(trip)
+    return trip
 
 
 @router.get("/{trip_id}", response_model=TripResponse)
