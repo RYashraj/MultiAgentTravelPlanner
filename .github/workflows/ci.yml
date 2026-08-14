@@ -25,6 +25,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Security audit
+        run: |
+          pip install pip-audit
+          pip-audit -r requirements.txt --audit-level=critical || true
+
       - name: Run tests with coverage
         env:
           DATABASE_URL: sqlite:///./test.db
@@ -50,7 +55,7 @@ jobs:
         run: npm ci
 
       - name: Security audit
-        run: npm audit --audit-level=critical || true
+        run: npm audit --audit-level=critical
 
       - name: Lint
         run: npm run lint
