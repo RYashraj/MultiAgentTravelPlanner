@@ -25,7 +25,19 @@ from pydantic import SecretStr
 
 from app.core.config import get_settings
 
+import re
+
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_llm_output(content: str) -> str:
+    """Sanitizes LLM outputs to prevent accidental secret or credential leakage."""
+    if not content:
+        return content
+    cleaned = re.sub(r'postgresql://[^\s]+', '[REDACTED_DB_URL]', content)
+    cleaned = re.sub(r'postgres://[^\s]+', '[REDACTED_DB_URL]', cleaned)
+    cleaned = re.sub(r'sb-[a-zA-Z0-9_-]{10,}', '[REDACTED_SECRET]', cleaned)
+    return cleaned
 
 # ---------------------------------------------------------------------------
 # Thread-safe soft rate-limit guard: never fire more than MAX_RPM calls/min
@@ -116,7 +128,7 @@ def call_gemini(
                         "GeminiClient: success model=%s attempt=%d len=%d",
                         model, attempt + 1, len(content),
                     )
-                    return content
+                    return _sanitize_llm_output(content)
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc).lower()
