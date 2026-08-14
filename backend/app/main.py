@@ -61,6 +61,10 @@ async def lifespan(app: FastAPI):
 
 
 from app.core.exceptions import setup_exception_handlers
+from app.core.logging import StructuredLoggingMiddleware, setup_sentry, setup_structured_logging
+
+setup_structured_logging()
+setup_sentry()
 
 app = FastAPI(
     title="VoyagerAI API",
@@ -73,6 +77,7 @@ app = FastAPI(
 
 setup_exception_handlers(app)
 
+app.add_middleware(StructuredLoggingMiddleware)
 app.add_middleware(SupabaseJWTMiddleware)
 
 app.add_middleware(

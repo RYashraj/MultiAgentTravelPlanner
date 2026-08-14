@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     amadeus_api_key: str = ""
     amadeus_api_secret: str = ""
 
+    sentry_dsn: str = ""
+    log_level: str = "INFO"
+
     @property
     def cors_origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.cors_origins.split(",") if origin.strip()]
