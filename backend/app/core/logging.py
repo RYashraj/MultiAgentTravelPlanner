@@ -47,15 +47,16 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         request.state.request_id = req_id
         token = request_id_var.set(req_id)
 
+        _logger = logging.getLogger("app.request")
+
         try:
             response = await call_next(request)
             duration_ms = (time.perf_counter() - start_time) * 1000
 
-            # Attach Request ID to response headers
+            # Attach Request ID to response headers (covers 401, 422, 429, 2xx, etc.)
             response.headers["X-Request-ID"] = req_id
 
-            logger = logging.getLogger("app.request")
-            logger.info(
+            _logger.info(
                 "%s %s -> %s (%.2fms)",
                 request.method,
                 request.url.path,
@@ -63,8 +64,36 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                 duration_ms,
             )
             return response
+        except Exception as exc:
+            # Starlette BaseHTTPMiddleware re-raises exceptions from inner middleware
+            # rather than converting them to responses.  We catch here so we can
+            # construct a 500 response that carries X-Request-ID before re-raising
+            # to the global exception handler registered via setup_exception_handlers().
+            duration_ms = (time.perf_counter() - start_time) * 1000
+            _logger.exception(
+                "%s %s -> 500 UNHANDLED (%.2fms): %s",
+                request.method,
+                request.url.path,
+                duration_ms,
+                exc,
+            )
+            # Import here to avoid circular imports at module load time
+            from app.core.config import get_settings as _get_settings
+            settings = _get_settings()
+            if settings.environment == "development":
+                detail = f"Internal Server Error: {exc}"
+            else:
+                detail = "An internal server error occurred. Please try again later."
+            from fastapi.responses import JSONResponse as _JSONResponse
+            err_response = _JSONResponse(
+                status_code=500,
+                content={"detail": detail},
+                headers={"X-Request-ID": req_id},
+            )
+            return err_response
         finally:
             request_id_var.reset(token)
+
 
 
 def setup_structured_logging() -> None:
