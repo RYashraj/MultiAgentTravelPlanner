@@ -122,6 +122,18 @@ def setup_structured_logging() -> None:
             handler.addFilter(handler_filter)
 
 
+def _scrub_sentry_event(event: dict[str, Any], hint: dict[str, Any]) -> dict[str, Any]:
+    """Scrubs Authorization, Cookie, and API key headers from Sentry event payloads."""
+    if "request" in event and isinstance(event["request"], dict):
+        headers = event["request"].get("headers")
+        if isinstance(headers, dict):
+            for sensitive_key in ("authorization", "cookie", "x-api-key", "token", "password"):
+                for k in list(headers.keys()):
+                    if k.lower() == sensitive_key:
+                        headers[k] = "[SCRUBBED]"
+    return event
+
+
 def setup_sentry() -> bool:
     """
     Initializes Sentry error monitoring if SENTRY_DSN is configured.
@@ -144,6 +156,8 @@ def setup_sentry() -> bool:
             dsn=settings.sentry_dsn,
             environment=settings.environment,
             traces_sample_rate=1.0,
+            send_default_pii=False,
+            before_send=_scrub_sentry_event,
             integrations=[
                 FastApiIntegration(),
                 LoggingIntegration(level=logging.INFO, event_level=logging.ERROR),
@@ -157,3 +171,4 @@ def setup_sentry() -> bool:
     except Exception as exc:
         logger.error("Failed to initialize Sentry: %s", exc)
         return False
+
