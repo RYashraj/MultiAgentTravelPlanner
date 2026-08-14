@@ -89,6 +89,27 @@ def test_packing_list_rules():
     assert "Underwear (x2)" in sunny_city
 
 
+def test_packing_list_edge_cases():
+    # Edge Case 1: Missing / None / partial weather
+    missing_weather = generate_packing_list(None, 3, "city")
+    assert any("Passport" in item for item in missing_weather)
+    assert any("Light jacket" in item or "sweater" in item for item in missing_weather)
+
+    # Edge Case 2: One-day trip
+    one_day = generate_packing_list("Sunny", 1, "city")
+    assert any("Underwear (x1)" in item for item in one_day)
+
+    # Edge Case 3: Long trip (14+ days)
+    long_trip = generate_packing_list("Pleasant", 14, "city")
+    assert any("Underwear (x10)" in item for item in long_trip)
+    assert any("laundry" in item.lower() for item in long_trip)
+
+    # Edge Case 4: Unknown / invalid destination type
+    unknown_dest = generate_packing_list("Sunny", 3, "unknown_destination_type")
+    assert any("Smart casual outfits" in item for item in unknown_dest)
+    assert len(unknown_dest) > 5
+
+
 @pytest.mark.anyio
 async def test_dashboard_contains_packing_list(client, auth_headers, db_session):
     # 1. Create a trip

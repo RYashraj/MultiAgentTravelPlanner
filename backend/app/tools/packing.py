@@ -1,25 +1,33 @@
-def generate_packing_list(weather_condition: str, duration_days: int, destination_type: str) -> list[str]:
+def generate_packing_list(weather_condition: str | None, duration_days: int | None, destination_type: str | None) -> list[str]:
     """
-    Generate a rule-based packing list based on:
-    - weather_condition (e.g. Sunny, Rainy, Cold, Pleasant)
-    - duration_days (length of the trip)
-    - destination_type (beach, adventure, city)
+    Generate a robust, rule-based packing list based on:
+    - weather_condition (e.g. Sunny, Rainy, Cold, Pleasant, or None/unknown)
+    - duration_days (length of the trip; handles 1-day, long 14+ day trips, 0/None)
+    - destination_type (beach, adventure, city, or unknown/None)
     """
+    # Sanitize inputs with sensible defaults
+    days = max(1, int(duration_days or 1))
+    clothing_count = min(days, 10)
+
     # 1. Base items (essential for all trips)
     items = [
         "Passport / ID, visa & travel documents",
         "Phone charger & power bank",
         "Universal travel adapter",
         "Toiletries (toothbrush, toothpaste, deodorant, shampoo)",
-        f"Underwear (x{duration_days})",
-        f"Socks (x{duration_days})",
+        f"Underwear (x{clothing_count})",
+        f"Socks (x{clothing_count})",
         "Sleepwear / pajamas",
         "Personal medications & first-aid kit",
         "Refillable water bottle",
     ]
 
-    # 2. Weather-based items
-    weather = (weather_condition or "").lower()
+    # Additional tip for long trips
+    if days > 7:
+        items.append("Travel laundry detergent / wash bag (for trips longer than 1 week)")
+
+    # 2. Weather-based items (with robust fallbacks)
+    weather = (weather_condition or "").lower().strip()
     if any(kw in weather for kw in ("rain", "drizzle", "storm", "shower", "thunderstorm", "wet")):
         items.extend([
             "Compact umbrella",
@@ -44,15 +52,15 @@ def generate_packing_list(weather_condition: str, duration_days: int, destinatio
             "After-sun cooling gel (Aloe vera)",
         ])
     else:
-        # Pleasant / Mild / Cloudy / default temperate weather
+        # Default fallback for missing / partial / unknown / temperate weather
         items.extend([
             "Light jacket, sweater, or cardigan",
             "Comfortable sneakers / walking shoes",
             "Versatile layering t-shirts",
         ])
 
-    # 3. Destination type-based items (beach, adventure, city)
-    dest = (destination_type or "").lower()
+    # 3. Destination type-based items (beach, adventure, city, or generic fallback)
+    dest = (destination_type or "").lower().strip()
     if dest == "beach":
         items.extend([
             "Swimwear (swim trunks / bikini)",
@@ -70,7 +78,7 @@ def generate_packing_list(weather_condition: str, duration_days: int, destinatio
             "Quick-dry hiking trousers",
         ])
     else:
-        # Default/City
+        # Default fallback for city / unknown / generic destination types
         items.extend([
             "Smart casual outfits for dining out",
             "Comfortable urban walking shoes",
