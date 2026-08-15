@@ -7,7 +7,7 @@ import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { getSessionToken, signOut } from "@/lib/supabase";
 import { apiFetch, API_BASE_URL } from "@/lib/api";
-import { LogOut, Send, Terminal, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin, LayoutDashboard, Hotel } from "lucide-react";
+import { LogOut, Send, Terminal, Loader, Compass, ChevronLeft, CheckCircle, Plane, Home, Cpu, Activity, Sparkles, Database, Cloud, MapPin, LayoutDashboard, Hotel, Trash2 } from "lucide-react";
 
 function renderMarkdown(content: string) {
   if (!content) return null;
@@ -351,7 +351,7 @@ function ChatPageContent() {
       <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 flex-1 flex flex-col space-y-4 overflow-hidden">
         
         {/* Navigation / Header */}
-        <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
             <Link
               href="/trips"
@@ -366,6 +366,25 @@ function ChatPageContent() {
               <p className="text-[10px] text-[var(--color-text-muted)] font-mono truncate">ID: {tripId}</p>
             </div>
           </div>
+
+          {/* Delete Trip action */}
+          <button
+            onClick={async () => {
+              if (confirm("Are you sure you want to delete this trip?")) {
+                try {
+                  await apiFetch(`/trips/${tripId}`, { method: "DELETE" });
+                  router.push("/trips");
+                } catch {
+                  alert("Failed to delete trip.");
+                }
+              }
+            }}
+            className="px-3 py-1.5 rounded-xl border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-xs font-semibold flex items-center gap-1.5 transition-all"
+            title="Delete this trip"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            Delete Trip
+          </button>
         </div>
 
         {loadError ? (

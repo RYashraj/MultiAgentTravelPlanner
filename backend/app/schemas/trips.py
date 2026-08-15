@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class TripCreate(BaseModel):
     destination: str = Field(..., min_length=2, max_length=255, description="Target travel destination")
+    origin: str | None = Field(default=None, max_length=255, description="Origin city or departure location")
 
     @field_validator("destination")
     @classmethod
@@ -21,6 +22,7 @@ class TripCreate(BaseModel):
 class TripResponse(BaseModel):
     id: uuid.UUID
     destination: str
+    origin: str | None = None
     status: str
     is_saved: bool
     created_at: datetime

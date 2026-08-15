@@ -22,6 +22,7 @@ Responsibilities:
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
@@ -37,8 +38,8 @@ from app.agents.flight_agent import get_flight_options
 from app.agents.food_agent import get_food_recommendations
 from app.agents.gemini_client import call_gemini_async
 from app.agents.hotel_agent import get_hotel_options
-from app.agents.parser import parse_travel_state
-from app.agents.planner import planner_graph
+from app.agents.parser import parse_modification_intent, parse_travel_state
+from app.agents.planner import merge_node, planner_graph
 from app.agents.state import AgentState
 from app.agents.transport_agent import get_transport_options
 from app.db.models import Itinerary
@@ -100,12 +101,121 @@ class SupervisorAgent:
         history = messages_repo.list_for_trip(trip_id)
 
         # ----------------------------------------------------------------
-        # Case 1: Itinerary already exists → Gemini-powered follow-up
+        # Case 1: Itinerary already exists → handle modifications or follow-up
         # ----------------------------------------------------------------
         existing_itinerary = db.scalar(select(Itinerary).where(Itinerary.trip_id == trip_id))
         if existing_itinerary:
-            yield emit_log("Supervisor", f"Itinerary for {destination} already exists — generating follow-up response.")
-            ai_reply = await self._generate_ai_followup(destination, user_query, existing_itinerary.content, history)
+            yield emit_log("Supervisor", f"Itinerary for {destination} already exists — checking for modifications or follow-up.")
+            history_dicts = [{"role": m.role, "content": m.content} for m in history]
+            latest_state = await parse_travel_state(history_dicts, destination)
+
+            # Check for explicit modification intent in user_query
+            mod_intent = parse_modification_intent(user_query)
+            changes = dict(mod_intent.get("changes") or {})
+
+            # Check if user query is a confirmation ('yes', 'sure', 'do it', etc.)
+            is_confirmation = bool(re.match(r'^(?:yes|yeah|sure|ok|okay|do it|go ahead|please|update it|sounds good)\b', user_query.strip(), re.I))
+
+            pending_change = None
+            if is_confirmation and history:
+                # Look at previous assistant message for pending action
+                last_asst = next((m.content for m in reversed(history) if m.role == "assistant"), "")
+                m_dur_pend = re.search(r'(\d+)\s*(?:day|night)s?', last_asst, re.I)
+                if m_dur_pend and ("update" in last_asst.lower() or "days" in last_asst.lower() or "revise" in last_asst.lower()):
+                    try:
+                        pending_change = {"duration_days": int(m_dur_pend.group(1))}
+                    except ValueError:
+                        pass
+
+            if is_confirmation and not pending_change and not changes:
+                # User said 'yes' with no pending action -> ask focused question
+                reply = "I'm ready to help! What specific detail would you like to update? (e.g., duration, budget, origin city, or trip preferences)"
+                runs_repo.complete(agent_run, {"logs": run_logs, "mode": "clarification", "reply": reply})
+                assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", reply)
+                async for event in self._stream_text(reply, assistant_msg):
+                    yield event
+                return
+
+            if pending_change:
+                changes.update(pending_change)
+
+            # Check if query contains duration/budget/origin change phrases
+            if "duration_days" not in changes and latest_state.get("duration_days"):
+                m_dur = re.search(r'(\d+)\s*(?:day|night|week)s?', user_query, re.I)
+                if m_dur and ("update" in user_query.lower() or "change" in user_query.lower() or "make" in user_query.lower() or "trip" in user_query.lower()):
+                    changes["duration_days"] = latest_state.get("duration_days")
+
+            if "budget" not in changes and latest_state.get("budget"):
+                if re.search(r'\b(?:budget|luxury|cheap|5[- ]?star)\b', user_query, re.I) and ("say" in user_query.lower() or "make" in user_query.lower() or "change" in user_query.lower()):
+                    changes["budget"] = latest_state.get("budget")
+
+            if "origin" not in changes and latest_state.get("origin"):
+                if re.match(r'^(?:i am |i\'m )?(?:from|traveling from|travelling from|departing from|leaving from|coming from|my departure city is)\s+', user_query, re.I):
+                    changes["origin"] = latest_state.get("origin")
+
+            if changes or mod_intent.get("intent_found"):
+                # Apply changes to trip model
+                if "origin" in changes and changes["origin"]:
+                    trip.origin = changes["origin"]
+                db.commit()
+
+                new_duration = changes.get("duration_days") or latest_state.get("duration_days") or 3
+                new_budget = changes.get("budget") or latest_state.get("budget") or "Mid-range"
+                new_origin = trip.origin or latest_state.get("origin") or "Your departure city"
+                new_goal = latest_state.get("goal") or "Travel"
+                new_dates = latest_state.get("dates") or "Flexible"
+                existing_prefs = list(latest_state.get("preferences") or [])
+                new_pref_list = list(changes.get("preferences") or [])
+                combined_prefs = list(dict.fromkeys(existing_prefs + new_pref_list))
+
+                change_parts = []
+                if "duration_days" in changes:
+                    change_parts.append(f"duration to {new_duration} days")
+                if "budget" in changes:
+                    change_parts.append(f"budget to {new_budget}")
+                if "origin" in changes:
+                    change_parts.append(f"departure city to {new_origin}")
+                if "preferences" in changes and new_pref_list:
+                    change_parts.append(f"preferences to '{', '.join(new_pref_list)}'")
+                summary_str = ", ".join(change_parts) or "your requested preferences"
+
+                yield emit_log("Supervisor", f"Updating trip {summary_str} — regenerating itinerary.")
+
+                agent_state = AgentState(
+                    trip_id=str(trip_id),
+                    origin=new_origin,
+                    destination=destination,
+                    dates=new_dates,
+                    budget=new_budget,
+                    goal=new_goal,
+                    duration_days=new_duration,
+                    preferences=combined_prefs,
+                    user_message=user_query,
+                    memory_context=[],
+                    agent_outputs={},
+                )
+
+                new_narrative = await self._generate_updated_itinerary(agent_state)
+
+                formatted_reply = f"I've updated your trip ({summary_str}) and regenerated your full {new_duration}-day itinerary:\n\n{new_narrative}"
+
+                itinerary_repo.save(trip_id, formatted_reply)
+                trip.status = "planning"
+                db.commit()
+
+                runs_repo.complete(agent_run, {"logs": run_logs, "mode": "regeneration", "reply": formatted_reply})
+                assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", formatted_reply)
+                async for event in self._stream_text(formatted_reply, assistant_msg):
+                    yield event
+                return
+
+            # Default follow-up (no changes requested)
+            if latest_state.get("origin") and trip.origin != latest_state.get("origin"):
+                trip.origin = latest_state.get("origin")
+                db.commit()
+                yield emit_log("Supervisor", f"Updated departure origin to {trip.origin}.")
+
+            ai_reply = await self._generate_ai_followup(destination, user_query, existing_itinerary.content, history, origin=trip.origin)
             runs_repo.complete(agent_run, {"logs": run_logs, "mode": "followup", "reply": ai_reply})
 
             assistant_msg = messages_repo.create(trip_id, current_user.id, "assistant", ai_reply)
@@ -120,14 +230,35 @@ class SupervisorAgent:
         history_dicts = [{"role": m.role, "content": m.content} for m in history]
         state = await parse_travel_state(history_dicts, destination)
 
+        explicit_dest_change = bool(
+            re.search(r'\b(?:change|switch|update|set)\s+(?:the\s+)?destination\s+(?:to|for)\s+([a-zA-Z\s]{2,30})', user_query, re.I)
+            or re.search(r'\b(?:instead of\s+[a-zA-Z\s]+,?\s+go\s+to|change\s+trip\s+to)\s+([a-zA-Z\s]{2,30})', user_query, re.I)
+        )
         parsed_dest = state.get("destination")
-        if parsed_dest and isinstance(parsed_dest, str) and parsed_dest.strip() and parsed_dest.strip().lower() != destination.lower():
+        generic_words = {
+            "travelling", "traveling", "travel", "trip", "trips", "tour", "tours",
+            "holiday", "vacation", "stay", "relaxing", "exploring", "sightseeing",
+            "business", "work", "exploration"
+        }
+        if (
+            explicit_dest_change
+            and parsed_dest
+            and isinstance(parsed_dest, str)
+            and parsed_dest.strip()
+            and parsed_dest.strip().lower() not in generic_words
+            and parsed_dest.strip().lower() != destination.lower()
+        ):
             destination = parsed_dest.strip().title()
             trip.destination = destination
             db.commit()
-            yield emit_log("Supervisor", f"Updated trip destination to {destination} based on your message.")
+            yield emit_log("Supervisor", f"Updated trip destination to {destination} based on your explicit request.")
+        else:
+            destination = trip.destination
 
-        origin: str | None = state.get("origin")
+        origin: str | None = state.get("origin") or trip.origin
+        if origin and trip.origin != origin:
+            trip.origin = origin
+            db.commit()
         budget: str | None = state.get("budget")
         duration_days_raw = state.get("duration_days")
         dates: str | None = state.get("dates")
@@ -399,7 +530,23 @@ class SupervisorAgent:
     # ------------------------------------------------------------------
 
     @staticmethod
-    async def _generate_ai_followup(destination: str, user_query: str, itinerary_content: str, history: list) -> str:
+    async def _generate_updated_itinerary(agent_state: AgentState) -> str:
+        """Attempts planner_graph synthesis, falling back to merge_node if offline or Gemini fails."""
+        try:
+            planner_output = await planner_graph.ainvoke(agent_state)
+            agent_outputs = planner_output.get("agent_outputs", {})
+            planner_res = agent_outputs.get("planner", {})
+            narrative = planner_res.get("narrative", "")
+            if narrative and narrative.strip():
+                return narrative
+        except Exception:
+            logger.warning("Gemini planner failed for modification — using local fallback merge_node", exc_info=True)
+
+        res = merge_node(agent_state)
+        return res.get("agent_outputs", {}).get("planner", {}).get("narrative", "")
+
+    @staticmethod
+    async def _generate_ai_followup(destination: str, user_query: str, itinerary_content: str, history: list, origin: str | None = None) -> str:
         """Generate a natural, context-aware AI follow-up using Gemini."""
         # Build recent conversation context (last 6 messages)
         history_text = ""
@@ -418,13 +565,13 @@ class SupervisorAgent:
         sys_msg = SystemMessage(
             content=(
                 f"You are VoyagerAI, an expert and friendly AI travel companion. "
-                f"The user has a trip planned to {destination} and is asking follow-up questions. "
+                f"The user has a trip planned to {destination} departing from {origin or 'unspecified origin'} and is asking follow-up questions. "
                 f"Their existing itinerary is provided for context.\n\n"
                 f"RULES:\n"
                 f"1. Answer DIRECTLY and SPECIFICALLY — never give generic advice.\n"
                 f"2. Use Markdown formatting with emojis for readability.\n"
-                f"3. Reference specific places, prices in Rs., and real practical tips.\n"
-                f"4. If they ask to modify the plan, explain exactly HOW to change the day schedule.\n"
+                f"3. Reference specific places, prices, and real practical tips.\n"
+                f"4. If they ask to modify the plan or specify an origin city (e.g., Ahmedabad), acknowledge the change and explain how it affects flight/budget/schedule.\n"
                 f"5. If they ask about shopping, name specific markets, their days/timings, and price ranges.\n"
                 f"6. If they ask about food, name specific dishes and restaurants with estimated costs.\n"
                 f"7. Be conversational and enthusiastic — like a knowledgeable local friend.\n"
@@ -434,7 +581,8 @@ class SupervisorAgent:
         )
         user_prompt_msg = HumanMessage(
             content=(
-                f"Destination: {destination}\n\n"
+                f"Destination: {destination}\n"
+                f"Origin: {origin or 'Unspecified'}\n\n"
                 f"Recent Conversation:\n{history_text}\n"
                 f"User's Question: {user_query}\n\n"
                 f"Answer their question directly and helpfully."
@@ -448,19 +596,36 @@ class SupervisorAgent:
         except Exception as exc:
             logger.warning("Supervisor: Gemini follow-up failed (%s) — using minimal fallback", exc)
 
-        return SupervisorAgent._minimal_fallback(destination, user_query)
+        return SupervisorAgent._minimal_fallback(destination, user_query, origin=origin)
 
     @staticmethod
-    def _minimal_fallback(destination: str, user_query: str) -> str:
+    def _minimal_fallback(destination: str, user_query: str, origin: str | None = None) -> str:
         """Honest fallback when ALL Gemini models are unavailable."""
+        extracted_origin = origin
+        import re
+        m = re.search(
+            r'\b(?:i am |i\'m )?(?:travellin?g|travel|departing|flying|leaving|coming)?\s*from\s+([a-zA-Z][a-zA-Z\s]{1,30}?)(?:\s+to\b|\s+for\b|,|\.|$)',
+            user_query,
+            re.IGNORECASE,
+        )
+        if m:
+            cand = m.group(1).strip()
+            if cand.lower() not in {"here", "home", "there", "the", "a"}:
+                extracted_origin = cand.title()
+
+        origin_msg = ""
+        if extracted_origin:
+            from app.tools.places_tool import get_transport_info
+            transport = get_transport_info(extracted_origin, destination)
+            origin_msg = f"Got it! I've updated your departure city to **{extracted_origin}** for your trip to **{destination}**.\n\n{transport}\n\n"
+
         return (
             f"# ✨ VoyagerAI — {destination} Travel Assistant\n\n"
-            f"I'm having a momentary connection issue with my AI brain, but I'm still here to help!\n\n"
-            f"**Your question:** _{user_query}_\n\n"
-            f"I wasn't able to get a live AI response right now. Here's what you can do:\n"
-            f"- Try sending your message again in a moment ⏳\n"
-            f"- Or ask me anything specific about {destination} — transport, hotels, food, attractions, or day-by-day plan changes.\n\n"
-            f"I'll be back at full power shortly! 🚀"
+            f"{origin_msg}"
+            f"I'm here to help with your trip to **{destination}**!\n\n"
+            f"**Your request:** _{user_query}_\n\n"
+            f"Would you like me to revise your flight estimates, hotel choices, or day-by-day itinerary schedule for **{destination}**?\n\n"
+            f"- Feel free to ask about top attractions, local food, budget breakdowns, or transport details!\n"
         )
 
     @staticmethod

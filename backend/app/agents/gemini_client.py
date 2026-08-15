@@ -109,6 +109,7 @@ def call_gemini(
     settings = get_settings()
     api_key = settings.gemini_api_key
     if not api_key:
+        logger.error("GeminiClient: GEMINI_API_KEY is missing or not configured")
         raise RuntimeError("GEMINI_API_KEY not configured")
 
     last_exc: Exception | None = None
@@ -135,16 +136,23 @@ def call_gemini(
                 is_rate_limit = any(
                     k in err_str for k in ("429", "resource_exhausted", "quota", "rate")
                 )
+                is_timeout = "timeout" in err_str or "timed out" in err_str
                 if is_rate_limit:
                     sleep_for = 1 * (attempt + 1)  # Minimal sleep: 1s, 2s
                     logger.warning(
-                        "GeminiClient: 429 on %s attempt=%d — sleeping %ds",
+                        "GeminiClient: Rate limit (429/Quota) on %s attempt=%d — sleeping %ds",
                         model, attempt + 1, sleep_for,
                     )
                     time.sleep(sleep_for)
+                elif is_timeout:
+                    logger.warning(
+                        "GeminiClient: Timeout error on %s attempt=%d: %s",
+                        model, attempt + 1, exc,
+                    )
+                    break
                 else:
                     logger.warning(
-                        "GeminiClient: error on %s attempt=%d: %s",
+                        "GeminiClient: Model invocation error on %s attempt=%d: %s",
                         model, attempt + 1, exc,
                     )
                     break  # Non-rate-limit error → try next model immediately

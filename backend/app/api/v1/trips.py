@@ -102,6 +102,10 @@ def delete_trip(
 ):
     trip = _owned_trip(trip_id, user, db)
     try:
+        from app.db.models import AgentRun, Itinerary, Message
+        db.query(Message).filter(Message.trip_id == trip_id).delete(synchronize_session=False)
+        db.query(Itinerary).filter(Itinerary.trip_id == trip_id).delete(synchronize_session=False)
+        db.query(AgentRun).filter(AgentRun.trip_id == trip_id).delete(synchronize_session=False)
         db.delete(trip)
         db.commit()
     except Exception:
