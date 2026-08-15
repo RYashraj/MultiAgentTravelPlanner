@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
@@ -24,6 +24,7 @@ import {
   BedDouble,
   Briefcase,
   Bookmark,
+  Trash2,
 } from "lucide-react";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -378,6 +379,7 @@ function PackingListSec({ s, tripId }: { s: DashboardSection; tripId: string }) 
 
 function DashboardContent() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
   const tripId = params.id;
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -413,6 +415,16 @@ function DashboardContent() {
     }
   };
 
+  const handleDeleteTrip = async () => {
+    if (!confirm("Are you sure you want to delete this trip?")) return;
+    try {
+      await apiFetch(`/trips/${tripId}`, { method: "DELETE" });
+      router.push("/trips");
+    } catch {
+      alert("Failed to delete trip.");
+    }
+  };
+
   return (
     <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans">
       <Navbar />
@@ -437,17 +449,27 @@ function DashboardContent() {
           {!isLoading && (
             <div className="sm:ml-auto flex items-center gap-3">
               {dashboard && (
-                <button
-                  onClick={handleToggleSave}
-                  className={`px-4 py-2 border rounded-xl flex items-center gap-2 text-xs font-semibold transition-all ${
-                    isSaved
-                      ? "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
-                      : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
-                  }`}
-                >
-                  <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-current" : ""}`} />
-                  {isSaved ? "Saved" : "Save Trip"}
-                </button>
+                <>
+                  <button
+                    onClick={handleToggleSave}
+                    className={`px-4 py-2 border rounded-xl flex items-center gap-2 text-xs font-semibold transition-all ${
+                      isSaved
+                        ? "bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20 shadow-[0_0_15px_rgba(245,158,11,0.2)]"
+                        : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]"
+                    }`}
+                  >
+                    <Bookmark className={`w-3.5 h-3.5 ${isSaved ? "fill-current" : ""}`} />
+                    {isSaved ? "Saved" : "Save Trip"}
+                  </button>
+                  <button
+                    onClick={handleDeleteTrip}
+                    className="px-3.5 py-2 border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl flex items-center gap-1.5 text-xs font-semibold transition-all"
+                    title="Delete this trip"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Delete
+                  </button>
+                </>
               )}
               <div className="flex items-center gap-1.5 text-xs text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 rounded-full px-3 py-1">
                 <Sparkles className="w-3 h-3" /> v0.2-full-mvp

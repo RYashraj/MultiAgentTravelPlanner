@@ -180,7 +180,11 @@ RULE 4 - PRICING: Include prices for everything:
   - Attractions: entry fees
   - Shopping: price ranges
 
-RULE 5 - FORMAT: Write a beautiful Markdown itinerary with emojis, bold headers, day-by-day breakdown.
+RULE 5 - USER PREFERENCES & FOCUS:
+- The user's explicitly requested focus/preferences are: {', '.join(preferences) if preferences else 'local exploration'}.
+- If the user specifically asked for local markets, beaches, or food, make sure the day-by-day activities revolve around those requested interests!
+
+RULE 6 - FORMAT: Write a beautiful Markdown itinerary with emojis, bold headers, day-by-day breakdown.
 
 Now write the comprehensive, beautifully formatted Markdown itinerary following ALL rules above."""
 
@@ -248,9 +252,13 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
         if shopping_places and not places_by_type["shopping"]:
             places_by_type["shopping"] = shopping_places
 
+        # Check if user requested market/beach focus
+        has_market_pref = any("market" in str(p).lower() or "shop" in str(p).lower() for p in preferences)
+        has_beach_pref = any("beach" in str(p).lower() for p in preferences)
+
         # Build day-by-day content
         days_content = ""
-        for day in range(1, min(duration_days + 1, 8)):
+        for day in range(1, duration_days + 1):
             days_content += f"\n## 🗓️ Day {day}\n"
             if day == 1:
                 days_content += "**Arrival & Orientation**\n"
@@ -262,31 +270,43 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                 if places_by_type["restaurant"]:
                     r = places_by_type["restaurant"][0]
                     days_content += f"- 🍽️ **Dinner**: {r.get('name', 'Local Restaurant')} — {r.get('description', '')}\n"
-            elif day == 2 and places_by_type["shopping"]:
-                days_content += "**Shopping & Street Markets Day**\n"
-                days_content += "- 🚶 Morning: Local breakfast and street food\n"
-                for s in places_by_type["shopping"][:3]:
-                    days_content += f"- 🛍️ **{s.get('name')}** — {s.get('description', '')}\n"
-                if len(places_by_type["restaurant"]) > 1:
-                    r = places_by_type["restaurant"][1]
-                    days_content += f"- 🍽️ **Lunch**: {r.get('name')} — {r.get('description', '')}\n"
-            elif day <= len(places_by_type["attraction"]) + 2:
-                idx = day - 3 if day > 2 else day - 2
-                idx = max(0, idx)
-                if idx < len(places_by_type["attraction"]):
+            elif (day == 2 or (has_market_pref and day in (3, 4, 6))) and places_by_type["shopping"]:
+                s_idx = (day - 2) % len(places_by_type["shopping"])
+                s_item = places_by_type["shopping"][s_idx]
+                days_content += f"**{s_item.get('name', 'Local Market')} & Street Shopping**\n"
+                days_content += "- 🚶 Morning: Local breakfast and street food exploration\n"
+                days_content += f"- 🛍️ **{s_item.get('name')}** — {s_item.get('description', '')}\n"
+                days_content += "- 🛍️ Bargain for souvenirs, clothing, spices, and local handicrafts\n"
+                if places_by_type["restaurant"]:
+                    r = places_by_type["restaurant"][day % len(places_by_type["restaurant"])]
+                    days_content += f"- 🍽️ **Meal**: {r.get('name')} — {r.get('description', '')}\n"
+            elif (has_beach_pref and day in (3, 5, 7)) or (not has_market_pref and day <= len(places_by_type["attraction"]) + 2):
+                idx = (day - 2) % max(1, len(places_by_type["attraction"]))
+                if places_by_type["attraction"]:
                     a = places_by_type["attraction"][idx]
                     days_content += f"**Exploring {a.get('name', destination)}**\n"
-                    days_content += f"- 🗺️ Visit **{a.get('name', 'Top Attraction')}** — {a.get('description', '')}\n"
+                    days_content += f"- 🗺️ Visit **{a.get('name', 'Top Spot')}** — {a.get('description', '')}\n"
+                else:
+                    days_content += f"**Scenic Beach & Waterfront Promenade Walk**\n"
+                    days_content += f"- 🏖️ Morning & Afternoon: Relax at local beaches, try water activities, and enjoy beach shacks\n"
                 days_content += "- 🚶 Morning walk and local breakfast\n"
-                rest_idx = idx + 2
-                if rest_idx < len(places_by_type["restaurant"]):
-                    r = places_by_type["restaurant"][rest_idx]
-                    days_content += f"- 🍽️ **Lunch/Dinner**: {r.get('name', 'Local Eatery')} — {r.get('description', '')}\n"
+                if places_by_type["restaurant"]:
+                    r = places_by_type["restaurant"][(day + 1) % len(places_by_type["restaurant"])]
+                    days_content += f"- 🍽️ **Eatery**: {r.get('name', 'Local Eatery')} — {r.get('description', '')}\n"
             else:
-                days_content += "**Free Exploration Day**\n"
-                days_content += "- 🌅 Morning: Visit a local market or café\n"
-                days_content += "- 🏙️ Afternoon: Revisit your favourite spots\n"
-                days_content += "- 🌃 Evening: Farewell dinner at a top-rated local restaurant\n"
+                themes = [
+                    ("Cultural Immersion & Neighborhood Walking", "- 🏛️ Morning: Visit local heritage sites and historic plazas\n- ☕ Afternoon: Relax at a traditional café and enjoy regional pastries\n- 🎭 Evening: Experience local evening performances or cultural walk\n"),
+                    ("Local Artisan Workshops & Shopping", "- 🎨 Morning: Explore local artisan workshops and craft boutiques\n- 🛍️ Afternoon: Discover hidden alleyways and specialty stores\n- 🍲 Evening: Authentic dinner at a neighborhood favorite restaurant\n"),
+                    ("Parks, Gardens & Outdoor Leisure", "- 🌿 Morning: Stroll through scenic botanical gardens and urban parks\n- 🚴 Afternoon: Leisurely bike ride or waterfront promenade walk\n- 🌅 Evening: Sunset drinks and local street snacks\n"),
+                    ("Scenic Viewpoints & Architectural Marvels", "- 🏙️ Morning: Visit iconic observation decks and architectural landmarks\n- 📸 Afternoon: Photography tour of famous city vistas\n- 🍽️ Evening: Dinner with a view\n"),
+                    ("Gastronomy & Local Food Tasting", "- 🍜 Morning: Local breakfast and food market exploration\n- 🍡 Afternoon: Regional dessert and snack tasting tour\n- 🥂 Evening: Specialty culinary dining experience\n"),
+                    ("Day Trip & Surrounding Nature", "- 🚌 Morning: Short excursion to nearby countryside or scenic lookout\n- ⛰️ Afternoon: Nature walk or historic landmark visit\n- 🌌 Evening: Return to city for relaxed dinner\n"),
+                    ("Hidden Gems & Bookshops", "- 📚 Morning: Discover quiet historic bookshops and secret courtyards\n- ☕ Afternoon: Specialty coffee tasting and neighborhood lounge\n- 🌃 Evening: Evening stroll and street music\n"),
+                    ("Souvenir Hunting & Farewell Celebration", "- 🎁 Morning: Collect authentic local souvenirs and gifts\n- 🛍️ Afternoon: Final shopping spree at top district markets\n- 🍷 Evening: Special farewell dinner celebrating your trip!\n"),
+                ]
+                theme_idx = (day - 1) % len(themes)
+                t_title, t_body = themes[theme_idx]
+                days_content += f"**{t_title}**\n{t_body}"
 
         # Build shopping section
         shopping_section = ""
@@ -294,6 +314,15 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             shopping_section = "\n## 🛍️ Shopping Hotspots\n"
             for s in places_by_type["shopping"]:
                 shopping_section += f"- **{s.get('name')}** — {s.get('description', '')}\n"
+
+        intl_keywords = ["tokyo", "japan", "paris", "france", "london", "uk", "united kingdom", "new york", "usa", "bali", "indonesia", "singapore", "dubai", "uae", "bangkok", "thailand", "rome", "italy", "barcelona", "spain", "sydney", "australia"]
+        is_intl = any(k in destination.lower() for k in intl_keywords)
+        if is_intl:
+            sim_tip = "- 🌐 Get an eSIM or international roaming package for data connectivity"
+            booking_tip = "- 🎟️ Book flights on Google Flights / Skyscanner | Check local rail/subway passes"
+        else:
+            sim_tip = "- 🌐 Get a local SIM card (Jio/Airtel) for data connectivity"
+            booking_tip = "- 🎟️ Book trains on IRCTC.co.in | Flights on MakeMyTrip/Goibibo"
 
         full_narrative = (
             f"# 🌍 VoyagerAI Itinerary — {destination}\n"
@@ -312,8 +341,8 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             f"- 🗓️ **Best Time**: {dates or 'Year-round destination'}\n"
             f"- 📱 Use Google Maps for real-time navigation\n"
             f"- 🏧 Carry some local currency for street vendors and small shops\n"
-            f"- 🌐 Get a local SIM card (Jio/Airtel) for data connectivity\n"
-            f"- 🎟️ Book trains on IRCTC.co.in | Flights on MakeMyTrip/Goibibo\n"
+            f"{sim_tip}\n"
+            f"{booking_tip}\n"
             f"- 🛍️ Always bargain at street markets — start at 50% of the quoted price!\n"
         )
 

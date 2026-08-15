@@ -23,6 +23,7 @@ export function TripCard({ trip, onOpen, onDeleted, onSavedChange }: TripCardPro
 
   const handleDelete = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     if (!confirm("Are you sure you want to delete this trip?")) return;
     try {
       await apiFetch(`/trips/${trip.id}`, { method: "DELETE" });
@@ -34,6 +35,7 @@ export function TripCard({ trip, onOpen, onDeleted, onSavedChange }: TripCardPro
 
   const handleToggleSave = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    e.preventDefault();
     if (isSaving) return;
     const next = !isSaved;
     setIsSaved(next); // optimistic
@@ -55,9 +57,9 @@ export function TripCard({ trip, onOpen, onDeleted, onSavedChange }: TripCardPro
   };
 
   return (
-    <button
+    <div
       onClick={() => onOpen(trip.id)}
-      className="text-left bg-[var(--color-surface-alt)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-5 hover:border-indigo-400 hover:bg-[var(--color-surface-hover)] hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 group relative"
+      className="text-left bg-[var(--color-surface-alt)] backdrop-blur-md border border-[var(--color-border)] rounded-2xl p-5 hover:border-indigo-400 hover:bg-[var(--color-surface-hover)] hover:-translate-y-1 hover:shadow-xl hover:shadow-indigo-500/10 transition-all duration-300 group relative cursor-pointer"
     >
       <div className="flex items-center justify-between mb-3">
         <span className="w-9 h-9 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 group-hover:bg-indigo-500/20 transition-all">
@@ -115,6 +117,6 @@ export function TripCard({ trip, onOpen, onDeleted, onSavedChange }: TripCardPro
           </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }
