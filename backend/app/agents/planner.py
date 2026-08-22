@@ -210,6 +210,13 @@ RULE 5 - FORMAT: Write a beautiful Markdown itinerary with emojis, bold headers,
   - DO NOT repeat the same "arrive and explore" pattern every trip.
   - Make each day feel distinct and purposeful toward the user's goal.
 
+RULE 6 - LOGISTICS & PROXIMITY: Group activities and dining by location to minimize travel time.
+  - Do NOT suggest a hotel that is unreasonably far from the main attractions. If a budget hotel is far, suggest activities nearby for some of the days.
+  - Ensure the travel time between the daily activities, dining, and hotel is practical.
+
+RULE 7 - VARIETY: NEVER repeat the same restaurant (e.g., Paranthe Wali Gali) or attraction across multiple days.
+  - Suggest different dining experiences and places each day to provide a diverse experience.
+
 Now write the comprehensive, beautifully formatted Markdown itinerary following ALL rules above."""
 
             user_prompt = (
@@ -280,6 +287,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
         goal_lower = (goal or "").lower()
         is_shopping_goal = any(w in goal_lower for w in ["shop", "streetwear", "fashion", "market", "buy", "mall", "bazar", "bazaar"])
 
+        days_content = ""
         for day in range(1, min(duration_days + 1, 11)):
             days_content += f"\n## 🗓️ Day {day}\n"
             if day == 1:

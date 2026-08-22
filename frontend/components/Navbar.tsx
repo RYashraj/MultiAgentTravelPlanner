@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
+
 
 export function Navbar() {
   const { user, isLoading, signOut } = useAuth();
@@ -44,7 +44,7 @@ export function Navbar() {
         </Link>
 
         <nav className="flex items-center gap-3">
-          <ThemeToggle />
+
           {isLoading ? (
             <div className="w-24 h-8 rounded-lg bg-[var(--color-surface-hover)] animate-pulse" />
           ) : user ? (

@@ -1,6 +1,5 @@
 """Shared LangGraph state definition for Travel Planner agents."""
 from typing import Annotated
-
 from typing_extensions import TypedDict
 
 
