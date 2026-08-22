@@ -10,15 +10,11 @@ from functools import lru_cache
 from typing import Any
 
 from langchain_core.messages import (
-    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
-    ToolMessage,
 )
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import END, START, StateGraph
-from pydantic import SecretStr
 
 from app.agents.gemini_client import call_gemini
 from app.agents.state import AgentState
@@ -109,7 +105,7 @@ def merge_node(state: AgentState) -> dict[str, Any]:
 
     # Pre-fetch local context to inject into Gemini prompt
     loc_key = next(
-        (k for k in MOCK_PLACES_DB.keys()
+        (k for k in MOCK_PLACES_DB
          if k.lower() in destination.lower() or destination.lower() in k.lower()),
         None
     )
@@ -138,14 +134,6 @@ def merge_node(state: AgentState) -> dict[str, Any]:
 
     if api_key:
         try:
-            llm = ChatGoogleGenerativeAI(
-                model="gemini-2.0-flash",
-                api_key=SecretStr(api_key),
-                max_retries=1,
-                timeout=30,
-            )
-            llm_with_tools = llm.bind_tools([get_weather, search_places])  # type: ignore[arg-type]
-
             coordinator_context = ""
             if research_info:
                 coordinator_context = f"\n**Research Context:**\n{research_info}\n"
@@ -206,7 +194,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                 HumanMessage(content=user_prompt)
             ]
 
-            full_narrative = call_gemini(messages, timeout=20)
+            full_narrative = call_gemini(messages, timeout=20, tools=[get_weather, search_places])
             gemini_success = bool(full_narrative and full_narrative.strip())
 
         except Exception:

@@ -9,10 +9,8 @@ Performance: imports at module level, call_gemini used directly (no lazy import)
 """
 import logging
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
-from app.agents.gemini_client import call_gemini
 from app.agents.state import AgentState
 
 logger = logging.getLogger(__name__)

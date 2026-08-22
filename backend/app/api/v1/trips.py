@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.agents.supervisor import SupervisorAgent
+from app.core.rate_limit import rate_limit
 from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.repositories import (
@@ -21,8 +22,13 @@ from app.repositories import (
     TripRepository,
     UserRepository,
 )
-from app.schemas.trips import MessageCreate, MessageResponse, TripCreate, TripResponse, TripSaveRequest
-from app.core.rate_limit import rate_limit
+from app.schemas.trips import (
+    MessageCreate,
+    MessageResponse,
+    TripCreate,
+    TripResponse,
+    TripSaveRequest,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/trips", tags=["trips"])

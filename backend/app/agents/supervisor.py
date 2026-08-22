@@ -27,7 +27,7 @@ from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -193,8 +193,6 @@ class SupervisorAgent:
             logger.exception("Coordinator graph failed — continuing with empty context")
             current_outputs = {}
 
-        coord_brief = current_outputs.get("coordinator", {}).get("ai_brief", "")
-
         # ================================================================
         # Step 2: Parallel agents — Flight + Hotel + Weather + Attractions
         # All run concurrently to save time (~3-5x faster than sequential)
@@ -232,7 +230,7 @@ class SupervisorAgent:
             try:
                 from app.tools.places_tool import MOCK_PLACES_DB
                 loc_key = next(
-                    (k for k in MOCK_PLACES_DB.keys() if k.lower() in destination.lower() or destination.lower() in k.lower()),
+                    (k for k in MOCK_PLACES_DB if k.lower() in destination.lower() or destination.lower() in k.lower()),
                     None,
                 )
                 if loc_key and (places := MOCK_PLACES_DB.get(loc_key, [])):

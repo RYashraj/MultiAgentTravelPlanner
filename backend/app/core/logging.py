@@ -1,7 +1,5 @@
 import logging
-import uuid
 from contextvars import ContextVar
-from typing import Any, Dict
 
 from pythonjsonlogger import json as jsonlogger
 

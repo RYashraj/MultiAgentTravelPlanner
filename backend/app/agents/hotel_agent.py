@@ -64,8 +64,9 @@ def _call_gemini_for_hotels(
     Returns a structured dict on success, None on failure.
     """
     try:
-        from app.agents.gemini_client import call_gemini
         from langchain_core.messages import HumanMessage, SystemMessage
+
+        from app.agents.gemini_client import call_gemini
 
         messages = [
             SystemMessage(content=(
@@ -218,8 +219,8 @@ def get_hotel_options(
             "source": "local_db",
         }
 
-    except Exception as exc:
-        logger.error("HotelAgent error for %s: %s", destination, exc, exc_info=True)
+    except Exception:
+        logger.exception("HotelAgent error for %s", destination)
         daily_estimate = _DAILY_HOTEL_ESTIMATE.get(budget_tier, 3000)
         return {
             "found": False,

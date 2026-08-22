@@ -284,10 +284,10 @@ def get_flight_options(
             "source": "local_db",
         }
 
-    except Exception as exc:
-        logger.error(
-            "FlightAgent: unexpected error for %s to %s: %s",
-            origin, destination, exc, exc_info=True,
+    except Exception:
+        logger.exception(
+            "FlightAgent: unexpected error for %s to %s",
+            origin, destination,
         )
         return {
             "found": False,

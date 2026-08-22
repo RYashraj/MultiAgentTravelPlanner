@@ -62,8 +62,9 @@ def _call_gemini_for_budget(
     Returns a structured dict on success, None on failure.
     """
     try:
-        from app.agents.gemini_client import call_gemini
         from langchain_core.messages import HumanMessage, SystemMessage
+
+        from app.agents.gemini_client import call_gemini
 
         # Prepare flight context
         flight_ctx = "No flight data available."
@@ -380,7 +381,7 @@ def compute_budget(
         feasibility, savings_tips, breakdown, source.
     """
     # Normalise duration
-    days, dur_warn = _safe_int(duration_days, "duration_days")
+    days, _dur_warn = _safe_int(duration_days, "duration_days")
     if days <= 0:
         days = 3
 

@@ -65,10 +65,11 @@ def _fetch_openweather(location: str) -> dict | None:
 def _fetch_gemini_weather(location: str) -> dict | None:
     """Use Gemini to provide typical weather context for a destination."""
     try:
-        from app.agents.gemini_client import call_gemini
+        import datetime
+
         from langchain_core.messages import HumanMessage, SystemMessage
 
-        import datetime
+        from app.agents.gemini_client import call_gemini
         current_month = datetime.datetime.now().strftime("%B")
 
         messages = [

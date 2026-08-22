@@ -1,14 +1,14 @@
 import logging
-from typing import Dict, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.security import CurrentUser, get_current_user
-from app.db.session import get_db
-from app.db.models import User, Trip, AgentRun
 from app.core.exceptions import VoyagerError
+from app.core.security import CurrentUser, get_current_user
+from app.db.models import AgentRun, Trip, User
+from app.db.session import get_db
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -17,7 +17,7 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 def get_admin_stats(
     user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db)
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Returns basic usage stats.
     For this MVP, any authenticated user can view the dashboard.
@@ -50,6 +50,6 @@ def get_admin_stats(
                 "success_rate_percent": success_rate
             }
         }
-    except Exception as e:
+    except Exception:
         logger.exception("Failed to generate admin stats")
         raise VoyagerError("Failed to fetch admin statistics")

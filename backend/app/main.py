@@ -25,8 +25,8 @@ from fastapi.staticfiles import StaticFiles
 from app.api.v1 import admin, auth, dashboard, health, trips
 from app.core.auth_middleware import SupabaseJWTMiddleware
 from app.core.config import get_settings
-from app.core.logging import request_id_ctx, setup_logging
 from app.core.exception_handlers import add_exception_handlers
+from app.core.logging import request_id_ctx, setup_logging
 from app.db import models  # noqa: F401 — registers all ORM models on Base.metadata
 from app.db.base import Base
 from app.db.session import engine

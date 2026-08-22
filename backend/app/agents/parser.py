@@ -39,9 +39,8 @@ def heuristic_parse(messages: list[Any], destination: str) -> dict[str, Any]:
                 '', content.lower(), flags=re.IGNORECASE
             ).strip().title()
             # Accept as standalone origin reply if it's short (1-3 words) and not a full sentence
-            if stripped and len(content.split()) <= 5 and stripped not in ("Here", "Home", "There", "The", "A"):
-                if not origin:
-                    origin = stripped
+            if stripped and len(content.split()) <= 5 and stripped not in ("Here", "Home", "There", "The", "A") and not origin:
+                origin = stripped
 
     text = " ".join(parts).lower()
 
@@ -264,8 +263,9 @@ async def parse_travel_state(messages: list[Any], destination: str) -> dict[str,
         return heuristic
 
     try:
-        from app.agents.gemini_client import call_gemini_async
         from langchain_core.messages import HumanMessage
+
+        from app.agents.gemini_client import call_gemini_async
 
         prompt = (
             f"You are the travel coordinator agent for VoyagerAI.\n"
