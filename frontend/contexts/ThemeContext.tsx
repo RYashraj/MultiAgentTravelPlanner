@@ -27,12 +27,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY) as Theme | null;
-    if (stored === "dark" || stored === "light") {
-      setTheme(stored);
+    // App is dark-first — only restore dark, never light from storage.
+    if (stored === "dark") {
+      setTheme("dark");
+    } else {
+      setTheme("dark");
+      localStorage.setItem(STORAGE_KEY, "dark");
     }
-    // No OS-preference fallback: app is dark-first by design.
     setMounted(true);
   }, []);
+
 
   useEffect(() => {
     if (!mounted) return;

@@ -146,9 +146,47 @@ def merge_node(state: AgentState) -> dict[str, Any]:
                 if w_temp or w_cond:
                     coordinator_context += f"\n**Weather Context:** {w_temp}, {w_cond}. {w_tips[:150]}\n"
 
-            system_content = f"""You are the VoyagerAI Planner Agent. You MUST follow these STRICT rules:
+            goal_lower = (goal or "").lower()
+            is_shopping_goal = any(w in goal_lower for w in ["shop", "streetwear", "fashion", "market", "buy", "mall", "bazar", "bazaar"])
+            is_food_goal = any(w in goal_lower for w in ["food", "eat", "restaurant", "cuisine", "dine"])
+            is_adventure_goal = any(w in goal_lower for w in ["adventure", "trek", "hike", "outdoor", "sport"])
 
-RULE 1 - BUDGET ENFORCEMENT: The user's budget is '{budget}' ({budget_tier.upper()} tier).
+            if is_shopping_goal:
+                goal_rule = (
+                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    f"  The user's MAIN GOAL is SHOPPING/STREETWEAR. This is NOT optional.\n"
+                    f"  - At least 50-60% of days (i.e., {max(1, int(duration_days * 0.6))} out of {duration_days} days) MUST be dedicated primarily to shopping.\n"
+                    f"  - Spread shopping across MULTIPLE days — do NOT cram all shopping into 1 day.\n"
+                    f"  - Each shopping day should cover DIFFERENT areas/markets (not the same places repeated).\n"
+                    f"  - Sightseeing and historic spots should be SECONDARY — only 1-2 days at most.\n"
+                    f"  - If the user says 'streetwear', focus on sneaker shops, hypebeast stores, thrift/vintage markets.\n"
+                )
+            elif is_food_goal:
+                goal_rule = (
+                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    f"  The user's MAIN GOAL is FOOD/DINING. Plan a food-first itinerary.\n"
+                    f"  - Every day must include 2-3 SPECIFIC named restaurants or food experiences.\n"
+                    f"  - Include food tours, street food walks, local market tastings.\n"
+                    f"  - Attractions should be food-compatible (e.g., near good restaurants).\n"
+                )
+            elif is_adventure_goal:
+                goal_rule = (
+                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    f"  The user's MAIN GOAL is ADVENTURE/OUTDOORS.\n"
+                    f"  - Prioritize outdoor activities, treks, and sports every single day.\n"
+                    f"  - Minimize city sightseeing and shopping days.\n"
+                )
+            else:
+                goal_rule = (
+                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    f"  The user's main goal is: '{goal or 'general travel'}'.\n"
+                    f"  - Structure the MAJORITY of days around this goal.\n"
+                    f"  - Do NOT default to a generic arrive-sightsee-depart pattern.\n"
+                )
+
+            system_content = f"""{goal_rule}
+
+RULE 1 - BUDGET ENFORCEMENT: The user's budget is '{budget}' ({budget_tier.upper()} tier). Max budget cap: stay within this limit.
   - NEVER suggest 5-star or luxury hotels for budget/mid-range travellers.
   - ALWAYS recommend accommodation matching the budget tier.
 {hotel_ctx}
@@ -169,6 +207,8 @@ RULE 4 - PRICING: Include prices for everything:
   - Shopping: price ranges
 
 RULE 5 - FORMAT: Write a beautiful Markdown itinerary with emojis, bold headers, day-by-day breakdown.
+  - DO NOT repeat the same "arrive and explore" pattern every trip.
+  - Make each day feel distinct and purposeful toward the user's goal.
 
 Now write the comprehensive, beautifully formatted Markdown itinerary following ALL rules above."""
 
@@ -236,45 +276,78 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
         if shopping_places and not places_by_type["shopping"]:
             places_by_type["shopping"] = shopping_places
 
-        # Build day-by-day content
-        days_content = ""
-        for day in range(1, min(duration_days + 1, 8)):
+        # Build goal-aware day distribution
+        goal_lower = (goal or "").lower()
+        is_shopping_goal = any(w in goal_lower for w in ["shop", "streetwear", "fashion", "market", "buy", "mall", "bazar", "bazaar"])
+
+        for day in range(1, min(duration_days + 1, 11)):
             days_content += f"\n## 🗓️ Day {day}\n"
             if day == 1:
-                days_content += "**Arrival & Orientation**\n"
-                days_content += f"- ✈️ Arrive in {destination} and check into your accommodation\n"
+                days_content += "**Arrival & Check-in**\n"
+                days_content += f"- ✈️ Arrive in {destination} from {origin or 'your city'} and check into your accommodation\n"
                 if places_by_type["hotel"]:
                     h = places_by_type["hotel"][0]
-                    days_content += f"- 🏨 **Recommended Stay**: {h.get('name', 'Local Hotel')} — {h.get('description', '')}\n"
-                days_content += "- 🌆 Evening: Explore the local neighbourhood\n"
+                    days_content += f"- 🏨 **Stay**: {h.get('name', 'Local Hotel')} — {h.get('description', '')}\n"
+                days_content += "- 🌆 Evening: Settle in, grab dinner nearby\n"
                 if places_by_type["restaurant"]:
                     r = places_by_type["restaurant"][0]
                     days_content += f"- 🍽️ **Dinner**: {r.get('name', 'Local Restaurant')} — {r.get('description', '')}\n"
-            elif day == 2 and places_by_type["shopping"]:
-                days_content += "**Shopping & Street Markets Day**\n"
-                days_content += "- 🚶 Morning: Local breakfast and street food\n"
-                for s in places_by_type["shopping"][:3]:
-                    days_content += f"- 🛍️ **{s.get('name')}** — {s.get('description', '')}\n"
-                if len(places_by_type["restaurant"]) > 1:
-                    r = places_by_type["restaurant"][1]
-                    days_content += f"- 🍽️ **Lunch**: {r.get('name')} — {r.get('description', '')}\n"
-            elif day <= len(places_by_type["attraction"]) + 2:
-                idx = day - 3 if day > 2 else day - 2
-                idx = max(0, idx)
-                if idx < len(places_by_type["attraction"]):
+            elif day == duration_days:
+                days_content += "**Departure Day**\n"
+                days_content += "- 🌅 Morning: Last-minute shopping or breakfast at a local café\n"
+                days_content += f"- 🧳 Check out and head to the airport/station\n"
+                days_content += f"- ✈️ Return to {origin or 'home'}\n"
+            elif is_shopping_goal:
+                # Shopping-goal: most days are shopping days, 1-2 days for sights
+                num_sight_days = max(1, duration_days // 5)  # ~20% for sightseeing
+                # Day 2 to (duration-num_sight_days-1) = shopping days
+                shopping_day_idx = day - 2  # 0-indexed shopping days
+                total_shopping_days = duration_days - 2 - num_sight_days
+                if shopping_day_idx < total_shopping_days:
+                    # This is a shopping day
+                    shop_slice_start = (shopping_day_idx * 2) % max(1, len(places_by_type["shopping"]))
+                    day_shops = places_by_type["shopping"][shop_slice_start:shop_slice_start + 2]
+                    if not day_shops and places_by_type["shopping"]:
+                        day_shops = [places_by_type["shopping"][shopping_day_idx % len(places_by_type["shopping"])]]
+                    area_name = day_shops[0].get("name", "Shopping District") if day_shops else "Local Market"
+                    days_content += f"**Shopping Day {shopping_day_idx + 1} — {area_name} area**\n"
+                    days_content += "- 🌅 Morning: Local breakfast before heading out\n"
+                    for s in day_shops:
+                        days_content += f"- 🛍️ **{s.get('name')}** — {s.get('description', '')}\n"
+                    days_content += "- 🍜 Afternoon: Street food lunch between shops\n"
+                    # Rotate restaurants
+                    r_idx = shopping_day_idx % max(1, len(places_by_type["restaurant"]))
+                    if places_by_type["restaurant"]:
+                        r = places_by_type["restaurant"][r_idx]
+                        days_content += f"- 🍽️ **Dinner**: {r.get('name')} — {r.get('description', '')}\n"
+                    days_content += "- 💡 Tip: Bargain hard at markets, start at 40-50% of quoted price\n"
+                else:
+                    # Sightseeing day
+                    sight_idx = shopping_day_idx - total_shopping_days
+                    if sight_idx < len(places_by_type["attraction"]):
+                        a = places_by_type["attraction"][sight_idx]
+                        days_content += f"**Explore {a.get('name', destination)}**\n"
+                        days_content += f"- 🗺️ Visit **{a.get('name')}** — {a.get('description', '')}\n"
+                    else:
+                        days_content += f"**Free Exploration Day**\n"
+                        days_content += f"- 🏙️ Explore {destination} at your own pace\n"
+                    if places_by_type["restaurant"]:
+                        r = places_by_type["restaurant"][day % len(places_by_type["restaurant"])]
+                        days_content += f"- 🍽️ **Dinner**: {r.get('name')} — {r.get('description', '')}\n"
+            else:
+                # Non-shopping goal: cycle through attractions
+                idx = (day - 2) % max(1, len(places_by_type["attraction"]))
+                if places_by_type["attraction"]:
                     a = places_by_type["attraction"][idx]
                     days_content += f"**Exploring {a.get('name', destination)}**\n"
                     days_content += f"- 🗺️ Visit **{a.get('name', 'Top Attraction')}** — {a.get('description', '')}\n"
-                days_content += "- 🚶 Morning walk and local breakfast\n"
-                rest_idx = idx + 2
-                if rest_idx < len(places_by_type["restaurant"]):
-                    r = places_by_type["restaurant"][rest_idx]
-                    days_content += f"- 🍽️ **Lunch/Dinner**: {r.get('name', 'Local Eatery')} — {r.get('description', '')}\n"
-            else:
-                days_content += "**Free Exploration Day**\n"
-                days_content += "- 🌅 Morning: Visit a local market or café\n"
-                days_content += "- 🏙️ Afternoon: Revisit your favourite spots\n"
-                days_content += "- 🌃 Evening: Farewell dinner at a top-rated local restaurant\n"
+                else:
+                    days_content += f"**Day {day} in {destination}**\n"
+                    days_content += "- 🏙️ Explore local neighbourhoods\n"
+                if places_by_type["restaurant"]:
+                    r = places_by_type["restaurant"][day % len(places_by_type["restaurant"])]
+                    days_content += f"- 🍽️ **Dinner**: {r.get('name', 'Local Eatery')} — {r.get('description', '')}\n"
+
 
         # Build shopping section
         shopping_section = ""
