@@ -29,7 +29,7 @@ function loadGoogleMaps(apiKey: string): Promise<void> {
 
   mapsScriptPromise = new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places,geocoding`;
     script.async = true;
     script.onload = () => resolve();
     script.onerror = () => reject(new Error("Failed to load Google Maps"));
@@ -61,10 +61,15 @@ export function TripMap({ destination, hotels = [], attractions = [] }: TripMapP
     }
 
     let cancelled = false;
+    // Safety timeout: if the map doesn't load in 12s, fall back to list view
+    const timeout = setTimeout(() => {
+      if (!cancelled) setStatus("error");
+    }, 12000);
 
     loadGoogleMaps(apiKey)
       .then(() => {
         if (cancelled || !containerRef.current) return;
+        clearTimeout(timeout);
         const google = (window as any).google;
         const geocoder = new google.maps.Geocoder();
 
@@ -136,6 +141,7 @@ export function TripMap({ destination, hotels = [], attractions = [] }: TripMapP
 
     return () => {
       cancelled = true;
+      clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [destination, hotels.length, attractions.length]);

@@ -183,21 +183,30 @@ def _call_gemini_for_budget(
 # Local arithmetic fallback
 # ---------------------------------------------------------------------------
 
-def _parse_user_budget_inr(budget_str: str | None) -> int | None:
-    """Parse numeric INR target from user's budget input string."""
+def _parse_user_budget_inr(budget_str: str | None) -> tuple[int | None, int | None]:
+    """Parse numeric INR budget from user's budget input string.
+
+    Returns (min_budget, max_budget). For a range like '50 to 60 thousands',
+    returns (50000, 60000). For a single value like '60k', returns (None, 60000).
+    """
     if not budget_str:
-        return None
+        return None, None
     import re
     s = str(budget_str).lower().replace(",", "").replace("₹", "").replace("rs.", "").replace("rs", "").replace("inr", "").strip()
-    m = re.search(r'\d+', s)
-    if not m:
-        return None
-    val = int(m.group(0))
-    if "k" in s:
-        val *= 1000
-    if "usd" in s or "$" in str(budget_str):
-        val *= 85
-    return val if val > 0 else None
+    has_k = "k" in s or "thousand" in s
+    is_usd = "usd" in s or "$" in str(budget_str)
+    nums = [int(n) for n in re.findall(r'\d+', s)]
+    if not nums:
+        return None, None
+    multiplier = 1000 if has_k else 1
+    if is_usd:
+        multiplier *= 85
+    if len(nums) >= 2:
+        # Range like '50 to 60'
+        low, high = sorted(nums[:2])
+        return low * multiplier, high * multiplier
+    val = nums[0] * multiplier
+    return None, val if val > 0 else None
 
 
 def _compute_budget_local(
@@ -280,7 +289,8 @@ def _compute_budget_local(
     grand_total = flight_cost + hotel_cost + daily_total
 
     # --- Intelligent Budget Fitting & Feasibility ---
-    target_budget = _parse_user_budget_inr(budget_str)
+    min_budget, max_budget = _parse_user_budget_inr(budget_str)
+    target_budget = max_budget  # hard cap is the upper bound the user stated
     feasibility = ""
     savings_tips: list[str] = []
 
@@ -293,20 +303,29 @@ def _compute_budget_local(
                 opt_daily = max(((remaining_for_stay - (opt_nightly * duration_days)) // duration_days // 100) * 100, 1000)
 
                 hotel_cost = opt_nightly * duration_days
-                hotel_note = f"Rs.{opt_nightly:,}/night x {duration_days} nights = Rs.{hotel_cost:,} (tailored to your ₹{target_budget:,} target)"
+                hotel_note = f"Rs.{opt_nightly:,}/night x {duration_days} nights = Rs.{hotel_cost:,} (tailored to your ₹{target_budget:,} cap)"
                 daily_per_day = opt_daily
                 daily_total = opt_daily * duration_days
                 daily_note = f"Rs.{daily_per_day:,}/day x {duration_days} days = Rs.{daily_total:,} (meals, transport, activities)"
                 grand_total = flight_cost + hotel_cost + daily_total
 
+                # Hard cap: clamp grand_total to max_budget if still slightly over
+                if grand_total > target_budget:
+                    overage = grand_total - target_budget
+                    daily_total = max(daily_total - overage, duration_days * 500)
+                    daily_per_day = daily_total // duration_days
+                    daily_note = f"Rs.{daily_per_day:,}/day x {duration_days} days = Rs.{daily_total:,} (meals, transport, activities)"
+                    grand_total = flight_cost + hotel_cost + daily_total
+
+                budget_label = f"₹{min_budget:,}–₹{target_budget:,}" if min_budget else f"₹{target_budget:,}"
                 feasibility = (
-                    f"🎯 Target budget: ₹{target_budget:,} for {duration_days} days. "
-                    f"Standard {budget_tier} would cost ₹79,000+, so we optimized your plan with smart budget hotels (₹{opt_nightly:,}/night) "
-                    f"and local dining/transport (₹{daily_per_day:,}/day) to keep your total at ₹{grand_total:,}!"
+                    f"🎯 Budget target: {budget_label} for {duration_days} days. "
+                    f"We optimized your plan with smart budget hotels (₹{opt_nightly:,}/night) "
+                    f"and local dining/transport (₹{daily_per_day:,}/day) to keep your total at ₹{grand_total:,}."
                 )
                 savings_tips = [
-                    f"Selected comfortable 3-star hotels/guesthouses (₹{opt_nightly:,}/night) to stay within budget.",
-                    f"Use metro/buses and enjoy authentic local dining (₹{daily_per_day:,}/day) to keep daily expenses within your ₹{target_budget:,} target.",
+                    f"Selected 3-star hotels/guesthouses (₹{opt_nightly:,}/night) to stay within your budget cap.",
+                    f"Use metro/buses and local dining (₹{daily_per_day:,}/day) to stay within your ₹{target_budget:,} limit.",
                 ]
             else:
                 feasibility = (
@@ -319,8 +338,9 @@ def _compute_budget_local(
                     "Consider staying in hostels or homestays and using public transport exclusively.",
                 ]
         else:
+            budget_label = f"₹{min_budget:,}–₹{target_budget:,}" if min_budget else f"₹{target_budget:,}"
             feasibility = (
-                f"✅ Comfortable budget! Your estimated travel cost of Rs.{grand_total:,} is well within your Rs.{target_budget:,} budget, "
+                f"✅ Comfortable budget! Your estimated travel cost of Rs.{grand_total:,} is within your {budget_label} budget, "
                 f"leaving Rs.{target_budget - grand_total:,} buffer for souvenirs and shopping."
             )
 
