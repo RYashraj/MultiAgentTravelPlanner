@@ -126,7 +126,7 @@ export default function Home() {
           <div className="flex items-center gap-3 shrink-0">
             <button
               onClick={() => setRefreshKey((k) => k + 1)}
-              className="p-3 rounded-xl bg-[var(--color-surface)] hover:bg-slate-750 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all border border-[var(--color-border)]"
+              className="p-3 rounded-xl bg-[var(--color-surface)] hover:bg-slate-800 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] transition-all border border-[var(--color-border)]"
               title="Ping backend status"
             >
               <RotateCcw className="w-4 h-4" />
@@ -222,7 +222,7 @@ export default function Home() {
               {simStep > 0 && (
                 <button
                   onClick={resetSimulation}
-                  className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-slate-850 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-slate-900 text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)] text-xs transition-all flex items-center gap-1.5"
                 >
                   <RotateCcw className="w-3 h-3" /> Reset
                 </button>
@@ -240,7 +240,7 @@ export default function Home() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
             
             {/* Visual Agent Steps Grid */}
-            <div className="bg-[var(--color-surface)]/35 border border-slate-850 rounded-3xl p-6 space-y-4">
+            <div className="bg-[var(--color-surface)]/35 border border-slate-900 rounded-3xl p-6 space-y-4">
               <h4 className="text-xs font-bold text-[var(--color-text-secondary)] uppercase tracking-wider mb-2">Execution Flow Nodes</h4>
               
               <div className="space-y-4">
@@ -300,7 +300,7 @@ export default function Home() {
                   simStep >= 5 ? "bg-[var(--color-surface-alt)] border-emerald-500/25" : "bg-slate-950/20 border-slate-900/50 opacity-40"
                 }`}>
                   <div className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-mono font-bold shrink-0 ${
-                    simStep >= 5 ? "bg-emerald-500/15 text-emerald-450 border border-emerald-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
+                    simStep >= 5 ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" : "bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                   }`}>
                     04
                   </div>
@@ -316,7 +316,7 @@ export default function Home() {
 
             {/* Output Logs Console */}
             <div className="flex flex-col space-y-4">
-              <div className="bg-slate-950 border border-slate-850 rounded-3xl p-6 flex-1 flex flex-col font-mono relative overflow-hidden min-h-[300px]">
+              <div className="bg-slate-950 border border-slate-900 rounded-3xl p-6 flex-1 flex flex-col font-mono relative overflow-hidden min-h-[300px]">
                 <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-500" />
                 <div className="flex items-center gap-2 text-[var(--color-text-muted)] text-[10px] border-b border-slate-900 pb-3 mb-4 select-none">
                   <span className="w-2.5 h-2.5 rounded-full bg-red-500/20 border border-red-500/30" />
@@ -332,7 +332,7 @@ export default function Home() {
                   {simLog.map((log, index) => (
                     <div key={index} className="flex gap-2">
                       <span className="text-indigo-500 select-none">&gt;</span>
-                      <span className={log.startsWith("✔") ? "text-emerald-400 font-semibold" : "text-slate-350"}>
+                      <span className={log.startsWith("✔") ? "text-emerald-400 font-semibold" : "text-slate-400"}>
                         {log}
                       </span>
                     </div>
@@ -342,7 +342,7 @@ export default function Home() {
 
               {simStep === 5 && !isSimulating && (
                 <div className="bg-[var(--color-surface)]/50 border border-emerald-500/30 rounded-2xl p-5 animate-fade-in space-y-2">
-                  <div className="flex items-center gap-2 text-emerald-450 text-xs font-semibold">
+                  <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold">
                     <CheckCircle className="w-4 h-4" /> Itinerary Compiled Successfully!
                   </div>
                   <div className="text-[11px] text-[var(--color-text-secondary)] space-y-1 mt-2">

@@ -407,8 +407,12 @@ function DashboardContent() {
   }, [tripId]);
 
   const handleToggleSave = async () => {
+    const next = !isSaved;
     try {
-      const res = await apiFetch<{ is_saved: boolean }>(`/trips/${tripId}/save`, { method: "POST" });
+      const res = await apiFetch<{ is_saved: boolean }>(`/trips/${tripId}/save`, {
+        method: "POST",
+        body: JSON.stringify({ saved: next }),
+      });
       setIsSaved(res.is_saved);
     } catch (err) {
       alert("Failed to toggle save status.");

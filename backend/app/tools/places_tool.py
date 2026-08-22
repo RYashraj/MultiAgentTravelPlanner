@@ -66,6 +66,8 @@ MOCK_PLACES_DB = {
         {"name": "Paranthe Wali Gali (Chandni Chowk)", "type": "restaurant", "rating": 4.4, "description": "Famous narrow lane of stuffed paratha shops. 100+ years old. Meal ₹60–₹150 per paratha."},
         {"name": "Moti Mahal (Daryaganj)", "type": "restaurant", "rating": 4.3, "description": "Birthplace of butter chicken! Must-visit Delhi legend. Meal ₹400–₹800."},
         {"name": "Karim's (Jama Masjid)", "type": "restaurant", "rating": 4.5, "description": "Iconic Mughal cuisine restaurant since 1913. Try mutton korma and naan. Meal ₹300–₹700."},
+        {"name": "Al Jawahar (Jama Masjid)", "type": "restaurant", "rating": 4.3, "description": "Old Delhi Mughlai favourite next to Karim's — mutton stew and rumali roti. Meal ₹300–₹600."},
+        {"name": "Saravana Bhavan (Connaught Place)", "type": "restaurant", "rating": 4.4, "description": "Popular South Indian chain — dosas, idlis, filter coffee. Pure vegetarian. Meal ₹200–₹400."},
 
         {"name": "Zostel Delhi (Paharganj)", "type": "hotel", "budget_type": "budget", "rating": 4.2, "description": "Popular backpacker hostel. Dorm ₹500–₹800/night. Private rooms ₹1,500–₹2,500/night. Near New Delhi station."},
         {"name": "Hotel Ajanta (Paharganj)", "type": "hotel", "budget_type": "budget", "rating": 3.8, "description": "Budget hotel near New Delhi station. Rooms ₹1,200–₹2,000/night. Clean and practical."},
@@ -80,6 +82,9 @@ MOCK_PLACES_DB = {
         {"name": "Mapusa Friday Market", "type": "shopping", "rating": 4.2, "description": "Authentic local Goan market on Fridays. Spices, pickles, clothing, fresh produce. Best for local souvenirs."},
         {"name": "Britto's (Baga)", "type": "restaurant", "rating": 4.1, "description": "Iconic beach shack. Fresh seafood — fish thali ₹250–₹400, prawn curry ₹350–₹600. Great atmosphere."},
         {"name": "Fisherman's Wharf (South Goa)", "type": "restaurant", "rating": 4.4, "description": "Waterfront restaurant. Best prawn balchão and Goan fish curry. Meal ₹500–₹900."},
+        {"name": "Vinayak Family Restaurant (Assagao)", "type": "restaurant", "rating": 4.5, "description": "Local favourite for authentic Goan thalis and fish curry rice. Meal ₹200–₹400."},
+        {"name": "Gunpowder (Assagao)", "type": "restaurant", "rating": 4.5, "description": "Trendy South Indian-inspired restaurant in a converted Goan house. Meal ₹600–₹1,000."},
+        {"name": "Martin's Corner (Betalbatim)", "type": "restaurant", "rating": 4.4, "description": "Long-running Goan institution — crab xec xec and kingfish. Meal ₹500–₹1,000."},
         {"name": "Zostel Goa (Vagator)", "type": "hotel", "budget_type": "budget", "rating": 4.3, "description": "Top-rated hostel. Dorm beds ₹700–₹1,000/night. Pool, rooftop bar, great social vibe."},
         {"name": "Taj Exotica Resort (Luxury)", "type": "hotel", "budget_type": "luxury", "rating": 4.8, "description": "Mediterranean-style 5-star resort on Benaulim beach. Rooms ₹18,000–₹50,000/night."},
     ],
@@ -91,6 +96,9 @@ MOCK_PLACES_DB = {
         {"name": "Harajuku (Takeshita Street)", "type": "shopping", "rating": 4.4, "description": "Tokyo's famous youth fashion street — quirky streetwear, pop culture items, crepes. Very Instagrammable."},
         {"name": "Ichiran Ramen", "type": "restaurant", "rating": 4.5, "description": "Famous tonkotsu ramen chain with private solo dining booths. Ramen ¥900–¥1,500."},
         {"name": "Tsukiji Outer Market", "type": "restaurant", "rating": 4.5, "description": "Fresh sushi, sashimi, tamagoyaki from market stalls. Early morning breakfast under ¥2,000. Unmissable."},
+        {"name": "Uobei Shibuya (Conveyor Sushi)", "type": "restaurant", "rating": 4.3, "description": "Fast, cheap conveyor-belt sushi ordered by touchscreen. Plates ¥130–¥400."},
+        {"name": "Ippudo Ramen", "type": "restaurant", "rating": 4.4, "description": "Famous chain for rich tonkotsu ramen and gyoza. Ramen ¥1,000–¥1,600."},
+        {"name": "Gonpachi Nishi-Azabu", "type": "restaurant", "rating": 4.4, "description": "Izakaya said to have inspired the Kill Bill restaurant scene. Meal ¥3,000–¥6,000."},
         {"name": "Khaosan Tokyo Hostel (Budget)", "type": "hotel", "budget_type": "budget", "rating": 4.1, "description": "Budget hostel in Asakusa. Dorm ¥2,500–₹3,500/night. Great location near Senso-ji."},
         {"name": "Park Hyatt Tokyo (Luxury)", "type": "hotel", "budget_type": "luxury", "rating": 4.8, "description": "Luxury hotel from 'Lost in Translation'. Rooms ¥65,000+/night."},
     ],
@@ -104,6 +112,8 @@ MOCK_PLACES_DB = {
         {"name": "Suraj Kund Park", "type": "attraction", "rating": 4.2, "description": "Historic pond and peaceful green garden in the city center. Free entry."},
         {"name": "Marwari Bhojnalaya", "type": "restaurant", "rating": 4.5, "description": "Iconic traditional thali and North Indian vegetarian meal. Meal ₹150–₹300."},
         {"name": "Hari Vada Pav & Chaat (Sadar Bazaar)", "type": "restaurant", "rating": 4.6, "description": "Famous street food and chaat stall. Snacks ₹50–₹120."},
+        {"name": "Anaash Restaurant (Abu Lane)", "type": "restaurant", "rating": 4.3, "description": "Popular multi-cuisine family restaurant — North Indian and Chinese. Meal ₹250–₹500."},
+        {"name": "Rajhans Sweets & Restaurant", "type": "restaurant", "rating": 4.4, "description": "Well-known local chain for sweets, chaat, and vegetarian thalis. Meal ₹150–₹350."},
         {"name": "Hotel Crystal Palace (Budget)", "type": "hotel", "budget_type": "budget", "rating": 4.0, "description": "Clean budget stay in Meerut city center. Rooms ₹1,200–₹2,500/night."},
         {"name": "Bravura Gold Resort (Mid-Range)", "type": "hotel", "budget_type": "midrange", "rating": 4.3, "description": "Mid-range resort with pool and restaurants. Rooms ₹3,500–₹6,000/night."},
     ],
@@ -210,13 +220,24 @@ def search_places(location: str, query_type: str) -> str:
     loc_key = next((k for k in MOCK_PLACES_DB if k.lower() in location.lower() or location.lower() in k.lower()), None)
 
     if not loc_key:
-        return json.dumps([
+        # Generic fallback for any city not in MOCK_PLACES_DB — still needs to
+        # respect query_type, or a request for e.g. "attraction" would come
+        # back with restaurants/hotels/shopping mixed in too.
+        fallback_places = [
             {"name": f"Old Town of {location}", "type": "attraction", "rating": 4.5, "description": f"Historic city centre of {location} with local culture and architecture."},
             {"name": f"Local Market in {location}", "type": "shopping", "rating": 4.3, "description": f"Main shopping bazaar in {location} — local clothes, crafts, street food. Budget-friendly."},
             {"name": f"Budget Inn {location}", "type": "hotel", "budget_type": "budget", "rating": 3.9, "description": f"Clean budget hotel in central {location}. Rooms approx ₹1,500–₹2,500/night."},
             {"name": f"Mid-Range Hotel {location}", "type": "hotel", "budget_type": "midrange", "rating": 4.2, "description": f"Comfortable hotel in {location}. Rooms ₹3,000–₹6,000/night."},
-            {"name": "Local Cuisine Restaurant", "type": "restaurant", "rating": 4.4, "description": f"Best local food in {location}. Try the regional specialities. Meal ₹200–₹500."},
-        ])
+            {"name": f"Local Cuisine Restaurant ({location})", "type": "restaurant", "rating": 4.4, "description": f"Best local food in {location}. Try the regional specialities. Meal ₹200–₹500."},
+            {"name": f"{location} Street Food Corner", "type": "restaurant", "rating": 4.2, "description": f"Popular street-food stalls in {location} — snacks and quick bites. Meal ₹80–₹200."},
+            {"name": f"Heritage Thali House, {location}", "type": "restaurant", "rating": 4.3, "description": f"Traditional thali restaurant serving regional {location} specialities. Meal ₹150–₹350."},
+            {"name": f"Café {location}", "type": "restaurant", "rating": 4.1, "description": f"Cosy café for breakfast and light meals in {location}. Meal ₹150–₹400."},
+            {"name": f"{location} Grand Dining", "type": "restaurant", "rating": 4.4, "description": f"Multi-cuisine restaurant popular with travellers in {location}. Meal ₹300–₹700."},
+        ]
+        if query_type.lower() != "all":
+            filtered = [p for p in fallback_places if p["type"] == query_type.lower()]
+            return json.dumps(filtered if filtered else fallback_places)
+        return json.dumps(fallback_places)
 
     places = MOCK_PLACES_DB[loc_key]
 

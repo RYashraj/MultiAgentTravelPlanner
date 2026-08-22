@@ -5,7 +5,18 @@ instead of failing silently deep inside the app later.
 """
 from functools import lru_cache
 
+from pydantic import field_validator, ValidationInfo
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Defaults to fall back to when the matching env var is set but left blank
+# (e.g. ``REDIS_SESSION_TTL_SECONDS=`` in a copied .env file).
+_BLANK_ENV_DEFAULTS: dict[str, int] = {
+    "database_connect_timeout_seconds": 5,
+    "redis_session_ttl_seconds": 3600,
+    "rate_limit_auth_rpm": 10,
+    "rate_limit_message_rpm": 20,
+    "rate_limit_general_rpm": 120,
+}
 
 
 class Settings(BaseSettings):
@@ -20,6 +31,22 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     redis_session_ttl_seconds: int = 3600
     chroma_persist_dir: str = "./chroma_data"
+
+    @field_validator(
+        "database_connect_timeout_seconds",
+        "redis_session_ttl_seconds",
+        "rate_limit_auth_rpm",
+        "rate_limit_message_rpm",
+        "rate_limit_general_rpm",
+        mode="before",
+    )
+    @classmethod
+    def _blank_env_uses_default(cls, v, info: ValidationInfo):
+        """A blank string in .env (e.g. ``KEY=``) should fall back to the
+        field's default instead of crashing pydantic's int parser."""
+        if isinstance(v, str) and v.strip() == "":
+            return _BLANK_ENV_DEFAULTS[info.field_name]
+        return v
 
     supabase_url: str = ""
     supabase_anon_key: str = ""

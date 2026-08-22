@@ -258,6 +258,22 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
 
         # Build day-by-day content
         days_content = ""
+        # Tracks how many restaurant picks we've made so far so each pick
+        # advances through the list — guarantees no repeat until every
+        # restaurant has been used once (instead of the day-branches each
+        # computing their own index formula, which routinely collided and
+        # kept re-picking the same restaurant on multiple days).
+        restaurant_counter = 0
+
+        def next_restaurant():
+            nonlocal restaurant_counter
+            restaurants = places_by_type["restaurant"]
+            if not restaurants:
+                return None
+            r = restaurants[restaurant_counter % len(restaurants)]
+            restaurant_counter += 1
+            return r
+
         for day in range(1, duration_days + 1):
             days_content += f"\n## 🗓️ Day {day}\n"
             if day == 1:
@@ -267,8 +283,8 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                     h = places_by_type["hotel"][0]
                     days_content += f"- 🏨 **Recommended Stay**: {h.get('name', 'Local Hotel')} — {h.get('description', '')}\n"
                 days_content += "- 🌆 Evening: Explore the local neighbourhood\n"
-                if places_by_type["restaurant"]:
-                    r = places_by_type["restaurant"][0]
+                r = next_restaurant()
+                if r:
                     days_content += f"- 🍽️ **Dinner**: {r.get('name', 'Local Restaurant')} — {r.get('description', '')}\n"
             elif (day == 2 or (has_market_pref and day in (3, 4, 6))) and places_by_type["shopping"]:
                 s_idx = (day - 2) % len(places_by_type["shopping"])
@@ -277,8 +293,8 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                 days_content += "- 🚶 Morning: Local breakfast and street food exploration\n"
                 days_content += f"- 🛍️ **{s_item.get('name')}** — {s_item.get('description', '')}\n"
                 days_content += "- 🛍️ Bargain for souvenirs, clothing, spices, and local handicrafts\n"
-                if places_by_type["restaurant"]:
-                    r = places_by_type["restaurant"][day % len(places_by_type["restaurant"])]
+                r = next_restaurant()
+                if r:
                     days_content += f"- 🍽️ **Meal**: {r.get('name')} — {r.get('description', '')}\n"
             elif (has_beach_pref and day in (3, 5, 7)) or (not has_market_pref and day <= len(places_by_type["attraction"]) + 2):
                 idx = (day - 2) % max(1, len(places_by_type["attraction"]))
@@ -290,8 +306,8 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                     days_content += f"**Scenic Beach & Waterfront Promenade Walk**\n"
                     days_content += f"- 🏖️ Morning & Afternoon: Relax at local beaches, try water activities, and enjoy beach shacks\n"
                 days_content += "- 🚶 Morning walk and local breakfast\n"
-                if places_by_type["restaurant"]:
-                    r = places_by_type["restaurant"][(day + 1) % len(places_by_type["restaurant"])]
+                r = next_restaurant()
+                if r:
                     days_content += f"- 🍽️ **Eatery**: {r.get('name', 'Local Eatery')} — {r.get('description', '')}\n"
             else:
                 themes = [

@@ -19,6 +19,13 @@ class TripCreate(BaseModel):
         return cleaned
 
 
+class TripSaveRequest(BaseModel):
+    saved: bool | None = Field(
+        default=None,
+        description="Explicit target state. When omitted, the current is_saved value is toggled.",
+    )
+
+
 class TripResponse(BaseModel):
     id: uuid.UUID
     destination: str
