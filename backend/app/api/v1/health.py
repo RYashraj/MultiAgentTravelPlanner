@@ -59,7 +59,7 @@ def readiness_check(db: Session = Depends(get_db)) -> dict:
         "openweather": bool(settings.openweather_api_key),
         "google_places": bool(settings.google_places_api_key),
         "amadeus": bool(settings.amadeus_api_key and settings.amadeus_api_secret),
-        "supabase_auth": bool(settings.supabase_url and settings.supabase_jwt_secret),
+        "supabase_auth": bool(settings.supabase_url),
     }
 
     overall = "ready" if db_ok else "degraded"
