@@ -118,7 +118,7 @@ def main():
     print(f"Failed         : {failures} ({100*failures//total}%)")
     print(f"Wall time      : {wall_time:.2f}s")
     print(f"Throughput     : {total/wall_time:.1f} req/s")
-    print(f"\nLatency (ms):")
+    print("\nLatency (ms):")
     print(f"  Min    : {min(latencies):.1f}")
     print(f"  Mean   : {statistics.mean(latencies):.1f}")
     print(f"  Median : {statistics.median(latencies):.1f}")
@@ -128,7 +128,7 @@ def main():
     # Failures breakdown
     failed = [r for r in all_results if not r["ok"]]
     if failed:
-        print(f"\nFailed requests:")
+        print("\nFailed requests:")
         for f in failed[:10]:
             print(f"  {f}")
 
@@ -154,7 +154,7 @@ def main():
     with open("load_test_results.json", "w") as f:
         json.dump(summary, f, indent=2)
 
-    print(f"\nResults saved to load_test_results.json")
+    print("\nResults saved to load_test_results.json")
     print(f"{'='*60}\n")
 
 

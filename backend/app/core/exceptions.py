@@ -6,7 +6,6 @@ database connections, credentials, or raw third-party provider errors.
 Full diagnostic details are logged internally.
 """
 import logging
-from typing import Any
 
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError

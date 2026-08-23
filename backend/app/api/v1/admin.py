@@ -65,7 +65,7 @@ def get_admin_stats(
             },
             "recent_agent_runs": recent_runs_data,
         }
-    except Exception as exc:
+    except Exception:
         logger.exception("Failed to retrieve admin stats")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

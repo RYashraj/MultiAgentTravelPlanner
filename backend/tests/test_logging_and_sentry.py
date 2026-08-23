@@ -1,7 +1,6 @@
 """
 Tests for Structured Logging, Request ID propagation, and safe Sentry integration.
 """
-import pytest
 from app.core.config import get_settings
 from app.core.logging import setup_sentry
 

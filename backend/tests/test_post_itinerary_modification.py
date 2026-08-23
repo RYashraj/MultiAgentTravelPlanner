@@ -4,12 +4,11 @@ pending action confirmation, and offline regeneration in VoyagerAI.
 """
 import uuid
 import pytest
-from app.agents.parser import heuristic_parse, parse_modification_intent, parse_travel_state
+from app.agents.parser import heuristic_parse, parse_modification_intent
 from app.agents.planner import merge_node
 from app.agents.supervisor import SupervisorAgent
-from app.db.models import Itinerary, Message, Trip, User
+from app.db.models import Itinerary, User
 from app.repositories import (
-    AgentRunRepository,
     ItineraryRepository,
     MessageRepository,
     TripRepository,

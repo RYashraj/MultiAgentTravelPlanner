@@ -2,7 +2,6 @@
 Tests for Agent Hardening and Adversarial Prompts (Week 7 Prompt 6).
 Evaluates backend agent pipeline against 10 adversarial scenarios.
 """
-import pytest
 from app.agents.budget_agent import compute_budget
 from app.agents.gemini_client import _sanitize_llm_output
 from app.agents.parser import heuristic_parse

@@ -154,9 +154,9 @@ def get_transport_options(
     )
     airport_transfer = f"Taxi or airport shuttle bus to central {destination}: ~30–60 mins (Est. Rs.300–800)."
     local_transit = [
-        f"🚇 Metro / Rail: Fastest option for city travel (~Rs.20–60/trip)",
-        f"🚕 Taxi / Rideshare: Uber/Ola available for point-to-point travel (~Rs.150–400/trip)",
-        f"🚶 Walking: Central tourist districts are easily walkable"
+        "🚇 Metro / Rail: Fastest option for city travel (~Rs.20–60/trip)",
+        "🚕 Taxi / Rideshare: Uber/Ola available for point-to-point travel (~Rs.150–400/trip)",
+        "🚶 Walking: Central tourist districts are easily walkable"
     ]
 
     return {

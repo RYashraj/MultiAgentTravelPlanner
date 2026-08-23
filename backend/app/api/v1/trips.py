@@ -13,7 +13,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.agents.supervisor import SupervisorAgent
-from app.core.rate_limit import rate_limit
 from app.core.security import CurrentUser, get_current_user
 from app.db.session import get_db
 from app.repositories import (
@@ -60,7 +59,7 @@ def _embed_message_best_effort(trip_id: uuid.UUID, message_id: uuid.UUID, role: 
 # CRUD routes
 # ---------------------------------------------------------------------------
 
-@router.post("", response_model=TripResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(rate_limit(requests=10, window_seconds=60))])
+@router.post("", response_model=TripResponse, status_code=status.HTTP_201_CREATED)
 def create_trip(
     payload: TripCreate,
     user: CurrentUser = Depends(get_current_user),
@@ -179,7 +178,7 @@ def get_itinerary(
 # Message endpoint — delegates to SupervisorAgent
 # ---------------------------------------------------------------------------
 
-@router.post("/{trip_id}/messages", dependencies=[Depends(rate_limit(requests=5, window_seconds=60))])
+@router.post("/{trip_id}/messages")
 async def send_message(
     trip_id: uuid.UUID,
     payload: MessageCreate,

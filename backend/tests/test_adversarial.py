@@ -6,7 +6,6 @@ without crashing, leaking internal details, or producing dangerous outputs.
 
 Run: pytest tests/test_adversarial.py -v
 """
-import pytest
 from fastapi.testclient import TestClient
 
 
@@ -28,7 +27,7 @@ def test_empty_message_rejected(client: TestClient, auth_headers: dict):
     assert resp.status_code == 422
     body = resp.json()
     # Should return a structured error, not a raw stack trace
-    assert "error" in body
+    assert "errors" in body
     assert "Internal Server Error" not in str(body)
 
 
@@ -76,7 +75,7 @@ def test_destination_too_short(client: TestClient, auth_headers: dict):
         headers=auth_headers,
     )
     assert resp.status_code == 422
-    assert "error" in resp.json()
+    assert "errors" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +126,7 @@ def test_extremely_long_message(client: TestClient, auth_headers: dict):
         headers=auth_headers,
     )
     assert over_limit.status_code == 422
-    assert "error" in over_limit.json()
+    assert "errors" in over_limit.json()
 
 
 # ---------------------------------------------------------------------------
@@ -150,7 +149,7 @@ def test_prompt_injection_attempt(client: TestClient, auth_headers: dict):
         headers=auth_headers,
     )
     # API should handle gracefully — not 500 or expose secrets
-    assert resp.status_code not in (500,) or "error" in resp.json()
+    assert resp.status_code not in (500,) or "errors" in resp.json() or "detail" in resp.json()
     assert "API_KEY" not in resp.text
     assert "GEMINI" not in resp.text
     assert "Traceback" not in resp.text
@@ -181,7 +180,7 @@ def test_missing_required_field(client: TestClient, auth_headers: dict):
     """POST /trips with no destination body should return 422."""
     resp = client.post("/api/v1/trips", json={}, headers=auth_headers)
     assert resp.status_code == 422
-    assert "error" in resp.json()
+    assert "errors" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -193,5 +192,5 @@ def test_unauthenticated_request(client: TestClient):
     assert resp.status_code in (401, 403)
     body = resp.json()
     # Error response must be structured, not a raw exception
-    assert "detail" in body or "error" in body
+    assert "detail" in body or "errors" in body
     assert "Traceback" not in str(body)

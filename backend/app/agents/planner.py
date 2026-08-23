@@ -163,18 +163,18 @@ def merge_node(state: AgentState) -> dict[str, Any]:
                 )
             elif is_food_goal:
                 goal_rule = (
-                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
-                    f"  The user's MAIN GOAL is FOOD/DINING. Plan a food-first itinerary.\n"
-                    f"  - Every day must include 2-3 SPECIFIC named restaurants or food experiences.\n"
-                    f"  - Include food tours, street food walks, local market tastings.\n"
-                    f"  - Attractions should be food-compatible (e.g., near good restaurants).\n"
+                    "RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    "  The user's MAIN GOAL is FOOD/DINING. Plan a food-first itinerary.\n"
+                    "  - Every day must include 2-3 SPECIFIC named restaurants or food experiences.\n"
+                    "  - Include food tours, street food walks, local market tastings.\n"
+                    "  - Attractions should be food-compatible (e.g., near good restaurants).\n"
                 )
             elif is_adventure_goal:
                 goal_rule = (
-                    f"RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
-                    f"  The user's MAIN GOAL is ADVENTURE/OUTDOORS.\n"
-                    f"  - Prioritize outdoor activities, treks, and sports every single day.\n"
-                    f"  - Minimize city sightseeing and shopping days.\n"
+                    "RULE 0 - GOAL PRIORITY (MOST IMPORTANT):\n"
+                    "  The user's MAIN GOAL is ADVENTURE/OUTDOORS.\n"
+                    "  - Prioritize outdoor activities, treks, and sports every single day.\n"
+                    "  - Minimize city sightseeing and shopping days.\n"
                 )
             else:
                 goal_rule = (
@@ -330,7 +330,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             elif day == duration_days:
                 days_content += "**Departure Day**\n"
                 days_content += "- 🌅 Morning: Last-minute shopping or breakfast at a local café\n"
-                days_content += f"- 🧳 Check out and head to the airport/station\n"
+                days_content += "- 🧳 Check out and head to the airport/station\n"
                 days_content += f"- ✈️ Return to {origin or 'home'}\n"
             elif is_shopping_goal:
                 # Shopping-goal: most days are shopping days, 1-2 days for sights
@@ -364,7 +364,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
                         days_content += f"**Explore {a.get('name', destination)}**\n"
                         days_content += f"- 🗺️ Visit **{a.get('name')}** — {a.get('description', '')}\n"
                     else:
-                        days_content += f"**Free Exploration Day**\n"
+                        days_content += "**Free Exploration Day**\n"
                         days_content += f"- 🏙️ Explore {destination} at your own pace\n"
                     if places_by_type["restaurant"]:
                         r = places_by_type["restaurant"][day % len(places_by_type["restaurant"])]

@@ -3,7 +3,6 @@ Tests for Global Exception Handling and Input Validation Audit.
 Verifies error masking in production, Pydantic validation boundaries,
 and clean error responses for invalid inputs.
 """
-import pytest
 from fastapi.testclient import TestClient
 from app.main import app
 from app.core.config import get_settings

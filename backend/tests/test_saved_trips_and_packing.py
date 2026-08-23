@@ -1,6 +1,6 @@
 import uuid
 import pytest
-from app.db.models import Trip, User, Itinerary
+from app.db.models import Trip, Itinerary
 from app.tools.packing import generate_packing_list
 
 
@@ -42,7 +42,7 @@ def test_toggle_save_trip(client, auth_headers):
 def test_list_saved_trips_filter(client, auth_headers):
     # 1. Create two trips
     trip1 = client.post("/api/v1/trips", json={"destination": "Goa"}, headers=auth_headers).json()
-    trip2 = client.post("/api/v1/trips", json={"destination": "Ladakh"}, headers=auth_headers).json()
+    client.post("/api/v1/trips", json={"destination": "Ladakh"}, headers=auth_headers).json()
 
     # 2. Save one trip (Goa)
     client.post(f"/api/v1/trips/{trip1['id']}/save", headers=auth_headers)

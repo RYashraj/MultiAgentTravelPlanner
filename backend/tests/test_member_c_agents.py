@@ -2,7 +2,6 @@
 Tests for Member C Stretch Features: TransportAgent & FoodAgent
 Verifies fallback behavior, estimate disclosure, and non-crashing execution.
 """
-import pytest
 from app.agents.transport_agent import get_transport_options
 from app.agents.food_agent import get_food_recommendations
 

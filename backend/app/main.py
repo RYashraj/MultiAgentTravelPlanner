@@ -144,7 +144,7 @@ async def custom_redoc():
     )
 
 
-from app.api.v1 import admin, auth, dashboard, health, trips
+from app.api.v1 import admin
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(trips.router, prefix=settings.api_v1_prefix)

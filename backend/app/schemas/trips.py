@@ -30,6 +30,10 @@ class TripResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TripSaveRequest(BaseModel):
+    saved: bool
+
+
 class MessageCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=4000, description="User prompt content")
     dates: str | None = Field(default=None, max_length=100)

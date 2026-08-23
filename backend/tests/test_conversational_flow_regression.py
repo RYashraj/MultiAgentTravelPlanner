@@ -3,7 +3,7 @@ import pytest
 from app.agents.parser import heuristic_parse, parse_travel_state
 from app.agents.planner import merge_node
 from app.agents.supervisor import SupervisorAgent
-from app.db.models import Itinerary, User
+from app.db.models import User
 from app.repositories import MessageRepository, TripRepository
 from app.tools.places_tool import get_transport_info
 

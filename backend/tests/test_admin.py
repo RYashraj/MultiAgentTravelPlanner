@@ -1,8 +1,7 @@
 """
 Tests for Admin Endpoints and Server-Side Authorization Enforcement.
 """
-import pytest
-from app.db.models import AgentRun, Trip, User
+from app.db.models import AgentRun, Trip
 import uuid
 
 

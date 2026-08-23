@@ -12,7 +12,6 @@ Tests all edge cases called out in the roadmap:
   - Very long trip (30 days)
   - Unknown budget tier
 """
-import pytest
 
 from app.agents.budget_agent import compute_budget
 

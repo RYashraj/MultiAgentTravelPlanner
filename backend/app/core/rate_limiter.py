@@ -11,7 +11,7 @@ Returns clean HTTP 429 (Too Many Requests) JSON responses without leaking intern
 import collections
 import logging
 import time
-from typing import Dict, List
+from typing import Dict
 
 from fastapi import Request, Response, status
 from fastapi.responses import JSONResponse
