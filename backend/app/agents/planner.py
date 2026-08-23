@@ -315,7 +315,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
         is_shopping_goal = any(w in goal_lower for w in ["shop", "streetwear", "fashion", "market", "buy", "mall", "bazar", "bazaar"])
 
         days_content = ""
-        for day in range(1, min(duration_days + 1, 11)):
+        for day in range(1, duration_days + 1):
             days_content += f"\n## 🗓️ Day {day}\n"
             if day == 1:
                 days_content += "**Arrival & Check-in**\n"
@@ -391,6 +391,18 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             for s in places_by_type["shopping"]:
                 shopping_section += f"- **{s.get('name')}** — {s.get('description', '')}\n"
 
+        # Build travel tips (with international awareness)
+        dest_lower = destination.lower()
+        intl_keywords = ["tokyo", "japan", "paris", "france", "london", "uk", "united kingdom", "new york", "usa", "bali", "indonesia", "singapore", "dubai", "uae", "bangkok", "thailand", "rome", "italy", "barcelona", "spain", "sydney", "australia"]
+        is_intl = any(k in dest_lower for k in intl_keywords)
+
+        if is_intl:
+            sim_tip = "- 🌐 Get a local eSIM (Airalo/Holafly) or regional SIM at the airport for data connectivity"
+            train_tip = "- 🎟️ Book flights and international connections on Google Flights or Skyscanner"
+        else:
+            sim_tip = "- 🌐 Get a local SIM card (Jio/Airtel) for data connectivity"
+            train_tip = "- 🎟️ Book trains on IRCTC.co.in | Flights on MakeMyTrip/Goibibo"
+
         full_narrative = (
             f"# 🌍 VoyagerAI Itinerary — {destination}\n"
             f"**{duration_days}-Day {goal or 'Travel'} Trip** | Budget: **{budget or 'Not specified'}** ({budget_tier}) | From: **{origin or 'your city'}**\n\n"
@@ -408,8 +420,8 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             f"- 🗓️ **Best Time**: {dates or 'Year-round destination'}\n"
             f"- 📱 Download offline maps for **{destination}** on Google Maps or Maps.me before you go\n"
             f"- 🏧 Carry some local currency for street vendors and small shops\n"
-            f"- 🌐 Get a local SIM card (Jio/Airtel) for data connectivity\n"
-            f"- 🎟️ Book trains on IRCTC.co.in | Flights on MakeMyTrip/Goibibo\n"
+            f"{sim_tip}\n"
+            f"{train_tip}\n"
             f"- 🛍️ Always bargain at street markets — start at 50% of the quoted price!\n"
         )
 

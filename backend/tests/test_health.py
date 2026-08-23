@@ -2,9 +2,12 @@
 Test the health endpoint using an in-memory SQLite DB instead of Postgres,
 so CI doesn't need a live database container just to run unit tests.
 """
+# pyrefly: ignore [missing-import]
 import pytest
 from fastapi.testclient import TestClient
+# pyrefly: ignore [missing-import]
 from sqlalchemy import create_engine
+# pyrefly: ignore [missing-import]
 from sqlalchemy.orm import sessionmaker
 
 from app.db.session import get_db

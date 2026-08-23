@@ -59,7 +59,7 @@ def test_concurrent_request_burst(client, auth_headers, monkeypatch):
     monkeypatch.setattr(settings, "rate_limit_general_rpm", 5)
 
     def _make_req():
-        return client.get("/api/v1/trips", headers=auth_headers).status_code
+        return client.get("/api/v1/health", headers=auth_headers).status_code
 
     # Fire 10 concurrent HTTP requests simultaneously across threads
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:

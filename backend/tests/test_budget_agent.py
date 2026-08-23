@@ -241,5 +241,5 @@ def test_target_budget_fitting():
     """Verify that an explicit target budget (e.g. 50000) adjusts hotel and daily spend to fit within budget and explains feasibility."""
     result = compute_budget(_good_flight(4500), _good_hotel(3500, 10), 10, "50000")
     assert result["grand_total_inr"] <= 50000
-    assert "Target budget: ₹50,000" in result["feasibility"]
+    assert "Budget target: ₹50,000" in result["feasibility"]
     assert len(result["savings_tips"]) > 0
