@@ -1,363 +1,241 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch } from "@/lib/api";
 import Link from "next/link";
+import { Navbar } from "@/components/Navbar";
+import { AuthGuard } from "@/components/AuthGuard";
+import { apiFetch, ApiError } from "@/lib/api";
+import {
+  ShieldAlert,
+  Activity,
+  Users,
+  MapPin,
+  CheckCircle,
+  XCircle,
+  Clock,
+  RefreshCw,
+} from "lucide-react";
 
-interface AgentRunStats {
-  total: number;
-  by_status: Record<string, number>;
-  success_rate_percent: number;
-}
-
-interface AdminStats {
-  total_users: number;
+interface AdminMetrics {
   total_trips: number;
-  agent_runs: AgentRunStats;
+  total_users: number;
+  total_agent_runs: number;
+  completed_agent_runs: number;
+  failed_agent_runs: number;
 }
 
-function StatCard({
-  label,
-  value,
-  sub,
-  icon,
-  color,
-}: {
-  label: string;
-  value: string | number;
-  sub?: string;
-  icon: string;
-  color: string;
-}) {
-  return (
-    <div className="stat-card" style={{ borderColor: color }}>
-      <div className="stat-icon" style={{ background: color + "22", color }}>
-        {icon}
-      </div>
-      <div className="stat-body">
-        <div className="stat-label">{label}</div>
-        <div className="stat-value">{value}</div>
-        {sub && <div className="stat-sub">{sub}</div>}
-      </div>
-    </div>
-  );
+interface AgentRunSummary {
+  id: string;
+  trip_id: string;
+  agent_name: string;
+  status: string;
+  duration_seconds: number | null;
+  started_at: string | null;
 }
 
-function ProgressBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+interface AdminData {
+  metrics: AdminMetrics;
+  recent_agent_runs: AgentRunSummary[];
+}
+
+function AdminDashboardContent() {
+  const [data, setData] = useState<AdminData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchStats = async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const stats = await apiFetch<AdminData>("/admin/stats");
+      setData(stats);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 403) {
+        setError("Access Denied: Server-side admin authorization required.");
+      } else {
+        setError(err instanceof Error ? err.message : "Failed to load admin statistics.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchStats();
+  }, []);
+
   return (
-    <div className="progress-row">
-      <div className="progress-label">
-        <span className="progress-name">{label}</span>
-        <span className="progress-count">{value} <span className="progress-pct">({pct}%)</span></span>
+    <main className="min-h-screen bg-[var(--color-bg)] text-[var(--color-text-primary)] font-sans">
+      <Navbar />
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 space-y-6">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[var(--color-border)]/60 pb-5">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-extrabold text-[var(--color-text-primary)] flex items-center gap-2">
+              <span className="w-2 h-5 bg-purple-500 rounded-full" />
+              System Admin & Telemetry
+            </h1>
+            <p className="text-xs text-[var(--color-text-muted)] mt-1">
+              Real-time audit log of agent executions, trip creation, and system metrics.
+            </p>
+          </div>
+          <button
+            onClick={fetchStats}
+            disabled={isLoading}
+            className="px-4 py-2 bg-[var(--color-surface)] hover:bg-[var(--color-surface-hover)] border border-[var(--color-border)] text-xs font-semibold text-[var(--color-text-secondary)] rounded-xl transition-all flex items-center gap-2 shrink-0 self-start sm:self-auto"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh Telemetry
+          </button>
+        </div>
+
+        {/* Error / Forbidden State */}
+        {error && (
+          <div className="bg-red-950/40 border border-red-900/60 rounded-2xl p-6 text-center space-y-3">
+            <ShieldAlert className="w-10 h-10 text-red-400 mx-auto" />
+            <h3 className="text-base font-bold text-red-400">{error}</h3>
+            <p className="text-xs text-[var(--color-text-muted)] max-w-md mx-auto">
+              This view enforces server-side authorization. Log in with an authorized admin account (e.g., admin@example.com).
+            </p>
+            <Link
+              href="/trips"
+              className="inline-flex items-center gap-1.5 text-xs text-indigo-400 hover:text-[var(--color-text-primary)] transition-colors mt-2"
+            >
+              ← Back to Trips
+            </Link>
+          </div>
+        )}
+
+        {/* Loading State */}
+        {isLoading && !data && !error && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-28 rounded-2xl bg-[var(--color-surface)]/40 animate-pulse" />
+            ))}
+          </div>
+        )}
+
+        {/* Admin Data View */}
+        {data && !error && (
+          <div className="space-y-8">
+            {/* Top Metric Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+              <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Total Trips</span>
+                  <MapPin className="w-4 h-4 text-indigo-400" />
+                </div>
+                <p className="text-2xl font-bold text-white">{data.metrics.total_trips}</p>
+              </div>
+
+              <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Total Users</span>
+                  <Users className="w-4 h-4 text-purple-400" />
+                </div>
+                <p className="text-2xl font-bold text-white">{data.metrics.total_users}</p>
+              </div>
+
+              <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Agent Runs</span>
+                  <Activity className="w-4 h-4 text-blue-400" />
+                </div>
+                <p className="text-2xl font-bold text-white">{data.metrics.total_agent_runs}</p>
+              </div>
+
+              <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Successful</span>
+                  <CheckCircle className="w-4 h-4 text-emerald-400" />
+                </div>
+                <p className="text-2xl font-bold text-emerald-400">{data.metrics.completed_agent_runs}</p>
+              </div>
+
+              <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl p-4">
+                <div className="flex items-center justify-between text-[var(--color-text-muted)] mb-2">
+                  <span className="text-[10px] font-mono uppercase tracking-wider">Failed Runs</span>
+                  <XCircle className="w-4 h-4 text-rose-400" />
+                </div>
+                <p className="text-2xl font-bold text-rose-400">{data.metrics.failed_agent_runs}</p>
+              </div>
+            </div>
+
+            {/* Agent Runs Audit Table */}
+            <div className="bg-[var(--color-surface-alt)] border border-[var(--color-border)] rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-[var(--color-border)]/60 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-indigo-400" />
+                  Recent Agent Executions
+                </h3>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  Showing latest {data.recent_agent_runs.length} runs
+                </span>
+              </div>
+
+              {data.recent_agent_runs.length === 0 ? (
+                <div className="p-8 text-center text-xs text-[var(--color-text-muted)]">
+                  No agent execution records found in database yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead className="bg-[var(--color-surface)] text-[var(--color-text-muted)] uppercase text-[10px] tracking-wider border-b border-[var(--color-border)]/40">
+                      <tr>
+                        <th className="py-3 px-4">Agent Name</th>
+                        <th className="py-3 px-4">Status</th>
+                        <th className="py-3 px-4">Duration</th>
+                        <th className="py-3 px-4">Trip ID</th>
+                        <th className="py-3 px-4">Started At</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]/40">
+                      {data.recent_agent_runs.map((run) => (
+                        <tr key={run.id} className="hover:bg-[var(--color-surface-hover)] transition-colors">
+                          <td className="py-3 px-4 font-mono font-semibold text-indigo-300">
+                            {run.agent_name}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                run.status === "completed"
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                                  : run.status === "failed"
+                                  ? "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                                  : "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                              }`}
+                            >
+                              {run.status}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-[var(--color-text-secondary)] font-mono">
+                            {run.duration_seconds != null ? `${run.duration_seconds}s` : "In progress"}
+                          </td>
+                          <td className="py-3 px-4 text-[var(--color-text-muted)] font-mono truncate max-w-[120px]">
+                            {run.trip_id}
+                          </td>
+                          <td className="py-3 px-4 text-[var(--color-text-muted)] font-mono">
+                            {run.started_at ? new Date(run.started_at).toLocaleTimeString() : "N/A"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${pct}%`, background: color }} />
-      </div>
-    </div>
+    </main>
   );
 }
 
 export default function AdminPage() {
-  const [stats, setStats] = useState<AdminStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    apiFetch<AdminStats>("/admin/stats")
-      .then(setStats)
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, []);
-
-  const statusColors: Record<string, string> = {
-    success: "#22c55e",
-    running: "#3b82f6",
-    failed: "#ef4444",
-    timeout: "#f59e0b",
-    error: "#f97316",
-  };
-
   return (
-    <div className="admin-page">
-      <style>{`
-        .admin-page {
-          min-height: 100vh;
-          background: #0b0f19;
-          color: #f1f5f9;
-          font-family: 'Inter', sans-serif;
-          padding: 2rem;
-        }
-        .admin-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 2.5rem;
-        }
-        .admin-title {
-          font-size: 1.75rem;
-          font-weight: 700;
-          background: linear-gradient(135deg, #818cf8, #38bdf8);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .admin-subtitle {
-          font-size: 0.9rem;
-          color: #64748b;
-          margin-top: 0.25rem;
-        }
-        .back-link {
-          color: #64748b;
-          text-decoration: none;
-          font-size: 0.875rem;
-          display: flex;
-          align-items: center;
-          gap: 0.35rem;
-          transition: color 0.2s;
-        }
-        .back-link:hover { color: #94a3b8; }
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-          gap: 1.25rem;
-          margin-bottom: 2rem;
-        }
-        .stat-card {
-          background: #0f172a;
-          border-radius: 1rem;
-          border-left: 4px solid;
-          padding: 1.5rem;
-          display: flex;
-          align-items: flex-start;
-          gap: 1rem;
-          transition: transform 0.2s;
-        }
-        .stat-card:hover { transform: translateY(-2px); }
-        .stat-icon {
-          width: 2.75rem;
-          height: 2.75rem;
-          border-radius: 0.75rem;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.3rem;
-          flex-shrink: 0;
-        }
-        .stat-label {
-          font-size: 0.8rem;
-          color: #64748b;
-          font-weight: 500;
-          text-transform: uppercase;
-          letter-spacing: 0.05em;
-        }
-        .stat-value {
-          font-size: 2rem;
-          font-weight: 700;
-          color: #f1f5f9;
-          line-height: 1.2;
-          margin-top: 0.25rem;
-        }
-        .stat-sub {
-          font-size: 0.8rem;
-          color: #64748b;
-          margin-top: 0.25rem;
-        }
-        .section {
-          background: #0f172a;
-          border-radius: 1rem;
-          padding: 1.5rem;
-          margin-bottom: 1.5rem;
-          border: 1px solid #1e293b;
-        }
-        .section-title {
-          font-size: 1rem;
-          font-weight: 600;
-          color: #94a3b8;
-          margin-bottom: 1.25rem;
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-        }
-        .progress-row { margin-bottom: 1rem; }
-        .progress-label {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 0.4rem;
-          font-size: 0.875rem;
-        }
-        .progress-name { color: #e2e8f0; text-transform: capitalize; }
-        .progress-count { color: #94a3b8; font-weight: 600; }
-        .progress-pct { color: #64748b; font-weight: 400; }
-        .progress-track {
-          height: 8px;
-          background: #1e293b;
-          border-radius: 999px;
-          overflow: hidden;
-        }
-        .progress-fill {
-          height: 100%;
-          border-radius: 999px;
-          transition: width 1s ease-out;
-        }
-        .success-rate {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-        }
-        .rate-circle {
-          width: 80px;
-          height: 80px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 1.25rem;
-          font-weight: 700;
-          flex-shrink: 0;
-        }
-        .rate-label {
-          font-size: 0.875rem;
-          color: #64748b;
-        }
-        .rate-val {
-          font-size: 1.5rem;
-          font-weight: 700;
-          color: #22c55e;
-          margin-top: 0.2rem;
-        }
-        .loading-shimmer {
-          background: linear-gradient(90deg, #1e293b 25%, #2d3f55 50%, #1e293b 75%);
-          background-size: 200% 100%;
-          animation: shimmer 1.4s infinite;
-          border-radius: 0.5rem;
-          height: 2rem;
-          margin: 0.5rem 0;
-        }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-        .error-box {
-          background: #450a0a;
-          border: 1px solid #ef4444;
-          border-radius: 0.75rem;
-          padding: 1.25rem;
-          color: #fca5a5;
-          font-size: 0.9rem;
-        }
-        .badge {
-          display: inline-block;
-          padding: 0.2rem 0.6rem;
-          border-radius: 999px;
-          font-size: 0.75rem;
-          font-weight: 600;
-          background: #1e293b;
-          color: #94a3b8;
-        }
-      `}</style>
-
-      <div className="admin-header">
-        <div>
-          <div className="admin-title">🛡️ Admin Dashboard</div>
-          <div className="admin-subtitle">VoyagerAI — Real-time usage statistics</div>
-        </div>
-        <Link href="/" className="back-link">
-          ← Back to App
-        </Link>
-      </div>
-
-      {loading && (
-        <div>
-          {[...Array(4)].map((_, i) => (
-            <div key={i} className="loading-shimmer" style={{ height: "100px", marginBottom: "1rem" }} />
-          ))}
-        </div>
-      )}
-
-      {error && (
-        <div className="error-box">
-          ⚠️ Failed to load stats: {error}
-        </div>
-      )}
-
-      {stats && (
-        <>
-          <div className="stats-grid">
-            <StatCard
-              label="Total Users"
-              value={stats.total_users.toLocaleString()}
-              icon="👥"
-              color="#818cf8"
-              sub="Registered accounts"
-            />
-            <StatCard
-              label="Total Trips"
-              value={stats.total_trips.toLocaleString()}
-              icon="✈️"
-              color="#38bdf8"
-              sub="All-time plans created"
-            />
-            <StatCard
-              label="Agent Runs"
-              value={stats.agent_runs.total.toLocaleString()}
-              icon="🤖"
-              color="#a78bfa"
-              sub="All-time agent executions"
-            />
-            <StatCard
-              label="Success Rate"
-              value={`${stats.agent_runs.success_rate_percent}%`}
-              icon="✅"
-              color="#22c55e"
-              sub={`${stats.agent_runs.by_status["success"] ?? 0} successful runs`}
-            />
-          </div>
-
-          <div className="section">
-            <div className="section-title">
-              🤖 Agent Run Breakdown
-              <span className="badge">{stats.agent_runs.total} total</span>
-            </div>
-            {Object.entries(stats.agent_runs.by_status).map(([status, count]) => (
-              <ProgressBar
-                key={status}
-                label={status}
-                value={count}
-                max={stats.agent_runs.total}
-                color={statusColors[status] ?? "#94a3b8"}
-              />
-            ))}
-            {Object.keys(stats.agent_runs.by_status).length === 0 && (
-              <div style={{ color: "#64748b", fontSize: "0.875rem" }}>
-                No agent runs recorded yet.
-              </div>
-            )}
-          </div>
-
-          <div className="section">
-            <div className="section-title">📊 Platform Health</div>
-            <div className="success-rate">
-              <div
-                className="rate-circle"
-                style={{
-                  background: `conic-gradient(#22c55e ${stats.agent_runs.success_rate_percent * 3.6}deg, #1e293b 0deg)`,
-                }}
-              >
-                {stats.agent_runs.success_rate_percent > 0
-                  ? `${stats.agent_runs.success_rate_percent}%`
-                  : "N/A"}
-              </div>
-              <div>
-                <div className="rate-label">Agent Success Rate</div>
-                <div className="rate-val">{stats.agent_runs.success_rate_percent}% successful</div>
-                <div style={{ color: "#64748b", fontSize: "0.8rem", marginTop: "0.25rem" }}>
-                  Based on {stats.agent_runs.total} total runs
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    <AuthGuard>
+      <AdminDashboardContent />
+    </AuthGuard>
   );
 }

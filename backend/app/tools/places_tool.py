@@ -143,7 +143,15 @@ def get_transport_info(origin: str, destination: str) -> str:
                 f"**🚌 Bus**: {data['bus']}\n"
             )
 
-    # Generic fallback
+    intl_keywords = ["tokyo", "japan", "paris", "france", "london", "uk", "united kingdom", "new york", "usa", "bali", "indonesia", "singapore", "dubai", "uae", "bangkok", "thailand", "rome", "italy", "barcelona", "spain", "sydney", "australia"]
+    if any(k in dest_lower for k in intl_keywords):
+        return (
+            f"## ✈️ Getting to {destination}\n\n"
+            f"**✈️ International Flights**: Search flights from {origin} to {destination} on Google Flights or Skyscanner. Book 4–8 weeks in advance for best rates.\n\n"
+            f"**🚆 Local Transit**: Use local transit (airport express, subway, train networks) upon arrival for easy travel around {destination}.\n"
+        )
+
+    # Generic domestic fallback
     return (
         f"## 🚆 Getting to {destination}\n\n"
         f"**✈️ Flight**: Check Google Flights or MakeMyTrip for {origin} → {destination} routes. "

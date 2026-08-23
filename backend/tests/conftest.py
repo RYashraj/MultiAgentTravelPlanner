@@ -1,4 +1,16 @@
 
+# ---------------------------------------------------------------------------
+# Force SQLite in-memory for *all* pytest runs, including plain local ones.
+# These lines must come BEFORE any app.* imports so that pydantic-settings
+# picks up the overrides when it first builds the Settings object.
+# Production defaults in config.py are untouched; this only affects the
+# process when running under pytest.
+# ---------------------------------------------------------------------------
+import os
+
+os.environ.setdefault("DATABASE_URL", "sqlite:///:memory:")
+os.environ.setdefault("ENVIRONMENT", "test")
+
 import jwt
 import pytest
 from fastapi.testclient import TestClient
@@ -115,3 +127,9 @@ def auth_headers():
         algorithm="HS256",
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+

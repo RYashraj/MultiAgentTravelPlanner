@@ -25,7 +25,19 @@ from pydantic import SecretStr
 
 from app.core.config import get_settings
 
+import re
+
 logger = logging.getLogger(__name__)
+
+
+def _sanitize_llm_output(content: str) -> str:
+    """Sanitizes LLM outputs to prevent accidental secret or credential leakage."""
+    if not content:
+        return content
+    cleaned = re.sub(r'postgresql://[^\s]+', '[REDACTED_DB_URL]', content)
+    cleaned = re.sub(r'postgres://[^\s]+', '[REDACTED_DB_URL]', cleaned)
+    cleaned = re.sub(r'sb-[a-zA-Z0-9_-]{10,}', '[REDACTED_SECRET]', cleaned)
+    return cleaned
 
 # ---------------------------------------------------------------------------
 # Thread-safe soft rate-limit guard: never fire more than MAX_RPM calls/min
@@ -97,6 +109,7 @@ def call_gemini(
     settings = get_settings()
     api_key = settings.gemini_api_key
     if not api_key:
+        logger.error("GeminiClient: GEMINI_API_KEY is missing or not configured")
         raise RuntimeError("GEMINI_API_KEY not configured")
 
     last_exc: Exception | None = None
@@ -116,23 +129,30 @@ def call_gemini(
                         "GeminiClient: success model=%s attempt=%d len=%d",
                         model, attempt + 1, len(content),
                     )
-                    return content
+                    return _sanitize_llm_output(content)
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc).lower()
                 is_rate_limit = any(
                     k in err_str for k in ("429", "resource_exhausted", "quota", "rate")
                 )
+                is_timeout = "timeout" in err_str or "timed out" in err_str
                 if is_rate_limit:
                     sleep_for = 1 * (attempt + 1)  # Minimal sleep: 1s, 2s
                     logger.warning(
-                        "GeminiClient: 429 on %s attempt=%d — sleeping %ds",
+                        "GeminiClient: Rate limit (429/Quota) on %s attempt=%d — sleeping %ds",
                         model, attempt + 1, sleep_for,
                     )
                     time.sleep(sleep_for)
+                elif is_timeout:
+                    logger.warning(
+                        "GeminiClient: Timeout error on %s attempt=%d: %s",
+                        model, attempt + 1, exc,
+                    )
+                    break
                 else:
                     logger.warning(
-                        "GeminiClient: error on %s attempt=%d: %s",
+                        "GeminiClient: Model invocation error on %s attempt=%d: %s",
                         model, attempt + 1, exc,
                     )
                     break  # Non-rate-limit error → try next model immediately

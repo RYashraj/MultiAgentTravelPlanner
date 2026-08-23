@@ -8,12 +8,8 @@ import asyncio
 import logging
 import os
 import urllib.request
-import uuid
 import warnings
 from contextlib import asynccontextmanager
-
-import sentry_sdk
-from starlette.middleware.base import BaseHTTPMiddleware
 
 warnings.filterwarnings("ignore", module="langgraph")
 
@@ -22,27 +18,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_redoc_html, get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 
-from app.api.v1 import admin, auth, dashboard, health, trips
+from app.api.v1 import auth, dashboard, health, trips
 from app.core.auth_middleware import SupabaseJWTMiddleware
 from app.core.config import get_settings
-from app.core.exception_handlers import add_exception_handlers
-from app.core.logging import request_id_ctx, setup_logging
 from app.db import models  # noqa: F401 — registers all ORM models on Base.metadata
 from app.db.base import Base
 from app.db.session import engine
 
-# Setup structured logging
-setup_logging()
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 settings = get_settings()
-
-if settings.sentry_dsn:
-    sentry_sdk.init(
-        dsn=settings.sentry_dsn,
-        traces_sample_rate=1.0,
-        environment=settings.environment,
-    )
 
 _STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 os.makedirs(_STATIC_DIR, exist_ok=True)
@@ -75,6 +60,13 @@ async def lifespan(app: FastAPI):
     yield
 
 
+from app.core.exceptions import setup_exception_handlers
+from app.core.logging import StructuredLoggingMiddleware, setup_sentry, setup_structured_logging
+from app.core.rate_limiter import RateLimiterMiddleware
+
+setup_structured_logging()
+setup_sentry()
+
 app = FastAPI(
     title="VoyagerAI API",
     description="Autonomous multi-agent AI travel planner — backend service",
@@ -84,18 +76,27 @@ app = FastAPI(
     redoc_url=None,
 )
 
-add_exception_handlers(app)
+setup_exception_handlers(app)
 
-class RequestIdMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request, call_next):
-        req_id = str(uuid.uuid4())
-        request_id_ctx.set(req_id)
-        response = await call_next(request)
-        response.headers["X-Request-ID"] = req_id
-        return response
-
-app.add_middleware(RequestIdMiddleware)
+# ---------------------------------------------------------------------------
+# Middleware stack — Starlette processes middleware in REVERSE registration
+# order: the LAST add_middleware call becomes the OUTERMOST layer.
+#
+# Desired runtime flow:
+#   CORS → StructuredLogging/RequestID → RateLimiter → SupabaseJWT → routes
+#
+# Therefore registration order (innermost first → outermost last):
+#   1. SupabaseJWTMiddleware  (innermost — runs last, closest to routes)
+#   2. RateLimiterMiddleware
+#   3. StructuredLoggingMiddleware  (runs before rate-limit and auth)
+#   4. CORSMiddleware  (outermost — first to see every request)
+#
+# This guarantees X-Request-ID is set BEFORE RateLimiter or Auth can
+# short-circuit, so 401 / 403 / 422 / 429 / 500 all carry the header.
+# ---------------------------------------------------------------------------
 app.add_middleware(SupabaseJWTMiddleware)
+app.add_middleware(RateLimiterMiddleware)
+app.add_middleware(StructuredLoggingMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -142,6 +143,8 @@ async def custom_redoc():
         redoc_js_url=js,
     )
 
+
+from app.api.v1 import admin, auth, dashboard, health, trips
 
 app.include_router(health.router, prefix=settings.api_v1_prefix)
 app.include_router(trips.router, prefix=settings.api_v1_prefix)

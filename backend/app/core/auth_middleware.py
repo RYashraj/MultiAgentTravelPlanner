@@ -11,7 +11,7 @@ from app.core.security import InvalidTokenError, verify_access_token_async
 class SupabaseJWTMiddleware(BaseHTTPMiddleware):
     """Protect the Week 3 user-scoped API before route handlers are reached."""
 
-    protected_prefixes = ("/api/v1/trips", "/api/v1/auth/me")
+    protected_prefixes = ("/api/v1/trips", "/api/v1/auth/me", "/api/v1/admin")
 
     async def dispatch(self, request: Request, call_next):
         # CORS preflight requests are intentionally unauthenticated.
