@@ -4,32 +4,41 @@
 
 ---
 
-## 🚦 Current Status & Deliverables (Weeks 1–8)
+## 🌟 What VoyagerAI Can Do
 
-| Deliverable / Feature Area | Status | Key Implementation Details |
-|---|---|---|
-| **Week 1–2: Core API & Authentication** | ✅ Done | FastAPI + SQLAlchemy CRUD endpoints for trips, messages, itineraries, and agent runs. Full Supabase JWT + local Dev/Mock auth bypass. |
-| **Week 3: LangGraph Multi-Agent Engine** | ✅ Done | StateGraph orchestration with type-safe message passing, conversation persistence, and real-time Server-Sent Events (SSE) streaming. |
-| **Week 4: RAG Memory & Tool Calling** | ✅ Done | ChromaDB vector storage for personalized user preferences; integrated OpenWeather API and Google Places API tool calling. |
-| **Week 5: Specialized Domain Agents** | ✅ Done | 5 distinct domain agents (`Coordinator`, `FlightAgent`, `HotelAgent`, `AttractionAgent`, `BudgetAgent`) with parallel execution. |
-| **Week 6: Saved Trips & Packing Lists** | ✅ Done | Save/unsave favorite trips, view trip history, and generate context-aware packing lists that respect real weather. |
-| **Week 7: API Hardening & Rate Limiting** | ✅ Done | Global exception handling, structured logging with Sentry PII scrubbing, and global sliding-window rate limiting. |
-| **Week 8: Production Readiness** | ✅ Done | Hardened Dockerfile, full CI pipeline (pytest, linting, security scans), cleaned up unused dependencies, and unified `main` branch. |
+VoyagerAI takes the stress out of travel planning by offering a fully autonomous, intelligent system that builds personalized itineraries tailored to your specific constraints, preferences, and budget.
+
+Key capabilities include:
+- **Constraint-Aware Planning**: Builds itineraries that strictly adhere to your set budgets and preferences, automatically scaling accommodations and daily spend.
+- **Dynamic Multi-Agent Collaboration**: Leverages specialized AI agents working together in real-time to plan flights, hotels, attractions, and budgets simultaneously.
+- **Context-Aware Recommendations**: Generates packing lists and daily plans that respect real weather forecasts at your destination.
+- **Personalized RAG Memory**: Remembers your preferences and past interactions to provide highly tailored recommendations.
+- **Trip Management**: Save favorite trips, view trip history, and easily manage your upcoming travel plans.
+
+---
+
+## ⚙️ How It Works
+
+VoyagerAI is powered by a robust **LangGraph Multi-Agent Engine** that orchestrates a team of specialized AI agents:
+
+1. **`FlightAgent`**: Evaluates routes, carriers, and pricing to find the best travel options.
+2. **`HotelAgent`**: Filters accommodations by budget tier and location.
+3. **`WeatherAgent`**: Fetches real-time weather forecasts to inform packing and activity planning.
+4. **`AttractionAgent`**: Recommends curated attractions based on your preferences.
+5. **`BudgetAgent`**: Synthesizes all costs into a clear, arithmetic breakdown to ensure you stay within your limit.
+
+These agents communicate seamlessly through a `StateGraph` orchestration system, with real-time Server-Sent Events (SSE) streaming updates directly to the frontend. A local ChromaDB vector store powers the RAG memory for personalized interactions, while external tools (OpenWeather API, Google Places API) provide real-time data.
 
 ---
 
 ## 🛠️ Tech Stack
 
-| Layer | Technology |
-|---|---|
-| **Backend Framework** | Python 3.12, FastAPI, SQLAlchemy ORM, Alembic |
-| **AI / Agent Engine** | Google Gemini 3.5 Flash, LangGraph (`StateGraph`) |
-| **Vector Store / RAG** | ChromaDB (local embedded vector database) |
-| **External API Tools** | OpenWeather API, Google Places API |
-| **Database** | SQLite (local dev) / PostgreSQL (production via Supabase) |
-| **Authentication** | Supabase Auth (JWT verification) + Mock Auth Bypass |
-| **Frontend Application** | Next.js 14 (App Router), TypeScript, Tailwind CSS |
-| **DevOps & CI/CD** | GitHub Actions CI, Docker, Docker Compose |
+- **Backend framework**: Python 3.12, FastAPI, SQLAlchemy ORM
+- **AI / Agent Engine**: Google Gemini 3.5 Flash, LangGraph (`StateGraph`)
+- **Vector Store / RAG**: ChromaDB 
+- **External API Tools**: OpenWeather API, Google Places API
+- **Database**: SQLite / PostgreSQL
+- **Frontend Application**: Next.js 14, TypeScript, Tailwind CSS
 
 ---
 
@@ -66,8 +75,6 @@ cp frontend/.env.local.example frontend/.env.local
 |---|---|
 | `NEXT_PUBLIC_API_BASE_URL` | http://localhost:8000/api/v1 |
 
-*(No Google Maps integration required.)*
-
 ---
 
 ## 🚀 How to Run Locally
@@ -97,21 +104,6 @@ cd frontend
 npm install
 npm run dev
 ```
-
----
-
-## 🤖 Multi-Agent Collaboration
-
-VoyagerAI uses an autonomous multi-agent collaboration suite:
-
-1. **Specialized Domain Agents**:
-   - **`FlightAgent`**: Evaluates routes, carriers, and pricing.
-   - **`HotelAgent`**: Filters accommodations by budget tier.
-   - **`WeatherAgent`**: Fetches real-time weather forecasts.
-   - **`AttractionAgent`**: Recommends curated attractions.
-   - **`BudgetAgent`**: Synthesizes all costs into an arithmetic breakdown.
-2. **Intelligent Target Budget Fitting**:
-   - Automatically scales accommodation and daily spend to fit within the user's explicit numeric budget.
 
 ---
 
