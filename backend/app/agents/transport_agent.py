@@ -79,7 +79,7 @@ def _call_gemini_for_transport(
         cleaned = raw.strip()
         if cleaned.startswith("```"):
             lines = cleaned.split("\n")
-            cleaned = "\n".join(l for l in lines if not l.startswith("```")).strip()
+            cleaned = "\n".join(line for line in lines if not line.startswith("```")).strip()
 
         parsed = json.loads(cleaned)
         daily_cost = int(float(str(parsed.get("estimated_daily_cost_inr", 0))))

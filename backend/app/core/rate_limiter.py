@@ -52,7 +52,7 @@ class InMemoryRateLimiter:
         remaining = max(0, limit_rpm - len(timestamps))
         return False, remaining, 0
 
-    def reset() -> None:
+    def reset(self) -> None:
         """Clear all rate limit state (useful for tests)."""
         self._records.clear()
 

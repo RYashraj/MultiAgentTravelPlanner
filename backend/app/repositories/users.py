@@ -16,5 +16,6 @@ class UserRepository:
         else:
             user.email = email
             user.full_name = full_name or user.full_name
-        self.db.commit(); self.db.refresh(user)
+        self.db.commit()
+        self.db.refresh(user)
         return user

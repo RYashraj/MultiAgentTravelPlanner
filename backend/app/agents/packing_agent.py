@@ -5,6 +5,8 @@ Falls back to a generic list gracefully if the AI fails or data is missing.
 import logging
 from typing import Any
 
+from langchain_core.messages import HumanMessage, SystemMessage
+
 from app.agents.gemini_client import call_gemini
 
 logger = logging.getLogger(__name__)
@@ -68,7 +70,11 @@ def generate_packing_list(destination: str, duration_days: int, weather_data: di
             f"Return ONLY the JSON object — no markdown, no extra text."
         )
         
-        response = call_gemini(system_prompt, user_prompt, response_format="json")
+        messages = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ]
+        response = call_gemini(messages, timeout=20)
         if not response:
             return generic_list
             

@@ -31,8 +31,6 @@ class Settings(BaseSettings):
     google_places_api_key: str = ""
     amadeus_api_key: str = ""
     amadeus_api_secret: str = ""
-    sentry_dsn: str | None = None
-
     sentry_dsn: str = ""
     log_level: str = "INFO"
 
