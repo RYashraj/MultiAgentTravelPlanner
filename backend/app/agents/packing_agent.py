@@ -52,7 +52,21 @@ def generate_packing_list(destination: str, duration_days: int, weather_data: di
             "If the destination or weather is extremely unusual or you are unsure, just provide a safe, generic list."
         )
 
-        user_prompt = f"Destination: {destination}\nDuration: {duration_days} days\nWeather: {weather_str}"
+        user_prompt = (
+            f"Destination: {destination}\n"
+            f"Duration: {duration_days} days\n"
+            f"Current weather: {weather_str}\n\n"
+            f"RULES:\n"
+            f"1. Use the EXACT destination name '{destination}' in category headers or item notes where relevant.\n"
+            f"2. The clothing category MUST reflect the actual weather ({weather_str}) — not generic items.\n"
+            f"   e.g., if hot: sunscreen, light fabrics; if cold: layers, thermals; if rainy: waterproof jacket.\n"
+            f"3. Include at least one {destination}-specific item if applicable "
+            f"(e.g., 'sturdy shoes for cobblestone Old Delhi lanes', 'water shoes for Goa beaches', "
+            f"'altitude sickness pills for Manali trekking').\n"
+            f"4. For a {duration_days}-day trip, recommend appropriate quantities "
+            f"(e.g., '{duration_days} sets of clothing', 'enough medication for {duration_days}+ days').\n"
+            f"Return ONLY the JSON object — no markdown, no extra text."
+        )
         
         response = call_gemini(system_prompt, user_prompt, response_format="json")
         if not response:

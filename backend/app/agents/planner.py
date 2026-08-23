@@ -219,21 +219,48 @@ RULE 7 - VARIETY: NEVER repeat the same restaurant (e.g., Paranthe Wali Gali) or
 
 Now write the comprehensive, beautifully formatted Markdown itinerary following ALL rules above."""
 
+            # Inject real flight/hotel data from upstream agents
+            flight_data = outputs.get("flight", {})
+            hotel_data = outputs.get("hotel", {})
+            flight_line = ""
+            if flight_data.get("found"):
+                carrier = flight_data.get("carrier", "")
+                price = flight_data.get("roundtrip_price_inr", 0)
+                duration = flight_data.get("duration_hrs", "")
+                flight_line = (
+                    f"\n**REAL FLIGHT DATA (USE VERBATIM):** {carrier}, round-trip Rs.{price:,}"
+                    f"{f', ~{duration} hrs' if duration else ''} — name this carrier and price in the transport section."
+                )
+            hotel_line = ""
+            if hotel_data.get("found") and hotel_data.get("hotels"):
+                top_hotel = hotel_data["hotels"][0]
+                h_name = top_hotel.get("name", "")
+                h_price = hotel_data.get("cheapest_nightly_inr", 0)
+                h_tier = hotel_data.get("budget_tier", "")
+                hotel_line = (
+                    f"\n**REAL HOTEL DATA (USE VERBATIM):** Recommended: {h_name} "
+                    f"at Rs.{h_price:,}/night ({h_tier} tier) — use this exact hotel name and price."
+                )
+
             user_prompt = (
                 f"Plan a **{budget_tier.upper()} BUDGET** trip to **{destination}** from **{origin or 'unspecified origin'}**.\n"
                 f"- Duration: {duration_days} days\n"
                 f"- Goal/Theme: {goal or 'general travel'}\n"
                 f"- Dates/Season: {dates or 'flexible'}\n"
                 f"- Budget: **{budget}** ({budget_tier} tier) — STRICTLY match this budget for hotels\n"
-                f"- Interests/Preferences: {', '.join(preferences) if preferences else 'streetwear shopping, local food, sightseeing'}\n"
+                f"- Interests/Preferences: {', '.join(preferences) if preferences else 'local food, sightseeing'}\n"
                 f"- Past context: {memory_context or 'None'}\n"
-                f"{coordinator_context}\n"
+                f"{coordinator_context}"
+                f"{flight_line}"
+                f"{hotel_line}\n\n"
+                "CRITICAL: Use the real flight carrier/price and real hotel name/rate above VERBATIM in the itinerary.\n"
+                "DO NOT invent a generic airline or hotel — use the exact names and prices provided.\n\n"
                 "Write the full itinerary following ALL system rules:\n"
-                "   - Transport section with prices from origin\n"
-                "   - Budget-appropriate hotels with Rs./night prices\n"
-                "   - Specific named shopping streets (Fashion Street, Linking Road, etc.) with price ranges\n"
-                "   - Day-by-day plan with restaurants and their prices\n"
-                "   - Travel tips"
+                "   - Transport section naming the exact carrier and round-trip price from the REAL FLIGHT DATA above\n"
+                "   - Accommodation section naming the exact hotel and nightly rate from the REAL HOTEL DATA above\n"
+                "   - Specific named shopping streets with price ranges\n"
+                "   - Day-by-day plan with named restaurants and their prices\n"
+                "   - Travel tips specific to this destination"
             )
 
             messages: list[BaseMessage] = [
@@ -379,7 +406,7 @@ Now write the comprehensive, beautifully formatted Markdown itinerary following 
             f"## 💡 Travel Tips\n"
             f"- 💰 **Budget**: {budget or 'Plan ahead for best deals'} ({budget_tier} tier)\n"
             f"- 🗓️ **Best Time**: {dates or 'Year-round destination'}\n"
-            f"- 📱 Use Google Maps for real-time navigation\n"
+            f"- 📱 Download offline maps for **{destination}** on Google Maps or Maps.me before you go\n"
             f"- 🏧 Carry some local currency for street vendors and small shops\n"
             f"- 🌐 Get a local SIM card (Jio/Airtel) for data connectivity\n"
             f"- 🎟️ Book trains on IRCTC.co.in | Flights on MakeMyTrip/Goibibo\n"

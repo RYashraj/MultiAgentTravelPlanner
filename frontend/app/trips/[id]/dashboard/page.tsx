@@ -6,7 +6,6 @@ import Link from "next/link";
 import { Navbar } from "@/components/Navbar";
 import { AuthGuard } from "@/components/AuthGuard";
 import { ItineraryCard } from "@/components/ItineraryCard";
-import { TripMap } from "@/components/TripMap";
 import { apiFetch } from "@/lib/api";
 import {
   Plane,
@@ -423,15 +422,6 @@ function DashboardContent() {
                 <AttrSec s={dashboard.attractions} />
               </SectionCard>
 
-              {(dashboard.hotels.data?.hotels?.length > 0 || dashboard.attractions.data?.length > 0) && (
-                <div className="md:col-span-2 lg:col-span-3">
-                  <TripMap
-                    destination={dashboard.destination}
-                    hotels={dashboard.hotels.data?.hotels || []}
-                    attractions={dashboard.attractions.data || []}
-                  />
-                </div>
-              )}
 
               <div className="lg:col-span-2">
                 <SectionCard
