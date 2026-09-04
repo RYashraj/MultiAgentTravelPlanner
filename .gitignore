@@ -62,3 +62,7 @@ MultiAgentTravelPlanner-main/
 # Logs and temp files
 *.log
 *.tmp
+
+# Presentation files
+ppt/
+*.pdf

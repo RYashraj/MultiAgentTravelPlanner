@@ -34,7 +34,7 @@ These agents communicate seamlessly through a `StateGraph` orchestration system,
 ## 🛠️ Tech Stack
 
 - **Backend framework**: Python 3.12, FastAPI, SQLAlchemy ORM
-- **AI / Agent Engine**: Google Gemini 3.5 Flash, LangGraph (`StateGraph`)
+- **AI / Agent Engine**: Google Gemini 2.0 Flash, LangGraph (`StateGraph`)
 - **Vector Store / RAG**: ChromaDB 
 - **External API Tools**: OpenWeather API, Google Places API
 - **Database**: SQLite / PostgreSQL
